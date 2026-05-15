@@ -38,9 +38,9 @@ def load_data():
     df['LyDo_X'] = df['Siêu thị'].astype(str).str.strip().str.lower()
     df['LyDo_Y'] = df['Kho rau\nChưa xác định'].astype(str).str.strip().str.lower()
     
-    df['Qty_N'] = pd.to_numeric(df['Hạo hụt tự nhiên'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
-    df['Qty_O'] = pd.to_numeric(df['SLbổ sung cho ST'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
-    df['Qty_P'] = pd.to_numeric(df['SL chênh lệch CXD'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+    df['Qty_N'] = df['Hạo hụt tự nhiên'].apply(clean_number)
+    df['Qty_O'] = df['SLbổ sung cho ST'].apply(clean_number)
+    df['Qty_P'] = df['SL chênh lệch CXD'].apply(clean_number)
     
     df['Hao hụt'] = np.where(df['LyDo_W'].str.contains('hao hụt'), df['Qty_N'], 0)
     df['BS_ST'] = np.where(df['LyDo_X'].str.contains('siêu thị'), df['Qty_O'], 0)
