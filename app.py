@@ -29,13 +29,23 @@ def load_data():
         if col in df.columns:
             df[col] = df[col].apply(clean_number)
             
-    # Tính toán cột Chênh lệch và các cột Số lượng chi tiết
+    # Tính toán cột Chênh lệch
     df['Chênh lệch'] = df['Số lượng nhận'] - df['Số lượng chuyển']
     
-    df['Hao hụt'] = pd.to_numeric(df['Hạo hụt tự nhiên'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
-    df['BS_ST'] = pd.to_numeric(df['SLbổ sung cho ST '].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
-    df['CXD'] = pd.to_numeric(df['SL chênh lệch CXD'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
-    df['Kho_Rau'] = df['Chênh lệch'].abs() - df['Hao hụt'] - df['BS_ST'] - df['CXD']
+    # Lọc số lượng dựa trên cột lý do W (Hao hụt), X (Siêu thị), Y (Kho rau / Chưa xác định)
+    # W tương ứng N, X tương ứng O, Y tương ứng P
+    df['LyDo_W'] = df['Hao hụt'].astype(str).str.strip().str.lower()
+    df['LyDo_X'] = df['Siêu thị'].astype(str).str.strip().str.lower()
+    df['LyDo_Y'] = df['Kho rau\nChưa xác định'].astype(str).str.strip().str.lower()
+    
+    df['Qty_N'] = pd.to_numeric(df['Hạo hụt tự nhiên'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+    df['Qty_O'] = pd.to_numeric(df['SLbổ sung cho ST '].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+    df['Qty_P'] = pd.to_numeric(df['SL chênh lệch CXD'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+    
+    df['Hao hụt'] = np.where(df['LyDo_W'].str.contains('hao hụt'), df['Qty_N'], 0)
+    df['BS_ST'] = np.where(df['LyDo_X'].str.contains('siêu thị'), df['Qty_O'], 0)
+    df['Kho_Rau'] = np.where(df['LyDo_Y'].str.contains('kho rau'), df['Qty_P'], 0)
+    df['CXD'] = np.where(df['LyDo_Y'].str.contains('chưa xác định'), df['Qty_P'], 0)
             
     df['Ngày'] = pd.to_datetime(df['Ngày chuyển hàng'], format='%m/%d/%Y', errors='coerce')
     df_may = df[df['Ngày'].dt.month == 5].copy()
