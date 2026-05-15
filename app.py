@@ -39,7 +39,7 @@ def load_data():
     df['LyDo_Y'] = df['Kho rau\nChưa xác định'].astype(str).str.strip().str.lower()
     
     df['Qty_N'] = pd.to_numeric(df['Hạo hụt tự nhiên'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
-    df['Qty_O'] = pd.to_numeric(df['SLbổ sung cho ST '].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+    df['Qty_O'] = pd.to_numeric(df['SLbổ sung cho ST'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
     df['Qty_P'] = pd.to_numeric(df['SL chênh lệch CXD'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
     
     df['Hao hụt'] = np.where(df['LyDo_W'].str.contains('hao hụt'), df['Qty_N'], 0)
