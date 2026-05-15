@@ -115,7 +115,8 @@ st.write("---")
 st.subheader("🏬 4. CHI TIẾT TỪNG NGÀY THEO SIÊU THỊ")
 
 # Bộ lọc theo ngày
-dates = ["Tất cả các ngày"] + list(pivot_ngay_st['Ngày_str'].unique())
+sorted_dates = [d for d in pivot_ngay['Ngày_str'] if d != 'Tổng']
+dates = ["Tất cả các ngày"] + sorted_dates
 selected_date = st.selectbox("🔍 Lọc theo Ngày:", dates)
 
 if selected_date != "Tất cả các ngày":
