@@ -558,7 +558,7 @@ if not df_loi.empty:
             s_date = pd.to_datetime(start_str + '.2026', format='%d.%m.%Y')
             e_date = pd.to_datetime(end_str + '.2026', format='%d.%m.%Y')
             if s_date <= date <= e_date:
-                return opt.split(' (')[0]
+                return opt
         return None
 
     df_loi_week = df_loi.copy()
