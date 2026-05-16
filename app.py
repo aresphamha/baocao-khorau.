@@ -100,7 +100,7 @@ pivot_ngay.insert(1, 'SL line nhập=0 / chênh lệch', pivot_ngay['SL line nh�
 pivot_ngay = pivot_ngay.drop(columns=['SL line nhập=0', 'SL line chênh lệch'])
 
 tong_row_ngay.insert(1, 'SL line nhập=0 / chênh lệch', '')
-pivot_ngay = pd.concat([pivot_ngay, tong_row_ngay], ignore_index=True)
+pivot_ngay = pd.concat([tong_row_ngay, pivot_ngay], ignore_index=True)
 
 pivot_ngay.rename(columns={
     'Tổng GT': 'Giá trị chênh lệch (VNĐ)',
@@ -126,7 +126,7 @@ pivot_clv2 = pivot_clv2[['CLV2', 'Số lượng line', 'Số lượng chuyển',
 pivot_clv2 = pivot_clv2.sort_values(by='Chênh lệch', ascending=False) # Sắp xếp giảm dần vì số chênh lệch lớn nhất lên đầu
 tong_row_clv2 = pivot_clv2.sum(numeric_only=True).to_frame().T
 tong_row_clv2['CLV2'] = 'Tổng'
-pivot_clv2 = pd.concat([pivot_clv2, tong_row_clv2], ignore_index=True)
+pivot_clv2 = pd.concat([tong_row_clv2, pivot_clv2], ignore_index=True)
 # 3. Top 5 CLV4 (Chênh lệch lớn nhất - tính theo trị tuyệt đối)
 clv4_sum = df_active.groupby('CLV4')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum().reset_index()
 clv4_sum['Abs_ChenhLech'] = clv4_sum['Chênh lệch'].abs()
@@ -311,7 +311,7 @@ if not df_loi.empty:
         if df_to_append.empty: return df_to_append
         tong_row = df_to_append.sum(numeric_only=True).to_frame().T
         tong_row[label_col] = 'Tổng'
-        return pd.concat([df_to_append, tong_row], ignore_index=True)
+        return pd.concat([tong_row, df_to_append], ignore_index=True)
         
     t1_loi = append_tong_row(t1_loi, 'ID ST')
     t2_loi = append_tong_row(t2_loi, 'RSM phụ trách')
