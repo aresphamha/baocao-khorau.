@@ -29,6 +29,9 @@ def load_data():
         if col in df.columns:
             df[col] = df[col].apply(clean_number)
             
+    if 'Chi nhánh nhận' in df.columns:
+        df['Chi nhánh nhận'] = df['Chi nhánh nhận'].astype(str).str.replace(',', '.', regex=False)
+            
     # Tính toán cột Chênh lệch
     # Sử dụng cột Chênh lệch gốc từ Google Sheets thay vì tính lại (Nhận - Chuyển) để đảm bảo số liệu khớp với file gốc
     # df['Chênh lệch'] = df['Số lượng nhận'] - df['Số lượng chuyển']
