@@ -130,64 +130,6 @@ pivot_qty = pivot_qty[['Ngày_str', 'ID ST', 'Chi nhánh nhận', 'SL line nhậ
 pivot_val_sum = df_may.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
 pivot_val_sum.rename(columns={'Tổng GT': 'Giá trị chênh lệch (VNĐ)'}, inplace=True)
 
-# 5. Báo cáo Tuần 19 & 20: Lỗi ST nhập thiếu
-# Lọc từ 04.05 đến 17.05 và lỗi "ST nhập thiếu"
-start_date = pd.to_datetime('2026-05-04')
-end_date = pd.to_datetime('2026-05-17')
-df_tuan = df_may[(df_may['Ngày'] >= start_date) & (df_may['Ngày'] <= end_date)].copy()
-df_loi = df_tuan[df_tuan['Lỗi'].fillna('').str.contains('ST nhập thiếu', case=False)].copy()
-
-if not df_loi.empty:
-    df_loi['SLbổ sung cho ST'] = pd.to_numeric(df_loi['SLbổ sung cho ST'], errors='coerce').fillna(0)
-    df_loi['Tổng ST'] = pd.to_numeric(df_loi['Tổng ST'], errors='coerce').fillna(0)
-    
-    # Xử lý GSM
-    if 'GSM phụ trách' in df_loi.columns:
-        df_loi['GSM phụ trách'] = df_loi['GSM phụ trách'].astype(str).str.split('-').str[-1].str.strip()
-    else:
-        df_loi['GSM phụ trách'] = 'N/A'
-        
-    if 'RSM phụ trách' not in df_loi.columns:
-        df_loi['RSM phụ trách'] = 'N/A'
-        
-    # Table 1: Theo Siêu thị
-    t1_loi = df_loi.groupby(['ID ST', 'Chi nhánh nhận', 'GSM phụ trách', 'RSM phụ trách']).agg(
-        So_ngay_tao_bo_sung=('Ngày', 'nunique'),
-        Tong_SL_da_tao=('SLbổ sung cho ST', 'sum'),
-        Tong_gia_tri=('Tổng ST', 'sum')
-    ).reset_index()
-    t1_loi.columns = ['ID ST', 'Name Mart', 'GSM phụ trách', 'RSM phụ trách', 'Số ngày tạo bổ sung', 'Tổng SL đã tạo', 'Tổng giá trị']
-    
-    # Table 2: Theo RSM
-    t2_loi = df_loi.groupby('RSM phụ trách').agg(
-        SL_ST_phat_sinh=('ID ST', 'nunique'),
-        SL_tao_bo_sung=('SLbổ sung cho ST', 'sum'),
-        Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
-    ).reset_index()
-    
-    if 'RSM phụ trách' in df_may.columns and 'GSM phụ trách' in df_may.columns:
-        df_may['GSM_tmp'] = df_may['GSM phụ trách'].astype(str).str.split('-').str[-1].str.strip()
-        gsm_per_rsm = df_may.groupby('RSM phụ trách')['GSM_tmp'].nunique().reset_index()
-        gsm_per_rsm.columns = ['RSM phụ trách', 'SL GSM quản lý']
-        t2_loi = pd.merge(t2_loi, gsm_per_rsm, on='RSM phụ trách', how='left')
-    else:
-        t2_loi['SL GSM quản lý'] = 0
-        
-    t2_loi = t2_loi[['RSM phụ trách', 'SL GSM quản lý', 'SL_ST_phat_sinh', 'SL_tao_bo_sung', 'Gia_tri_tao_bo_sung']]
-    t2_loi.columns = ['RSM phụ trách', 'SL GSM quản lý', 'SL ST phát sinh', 'SL tạo bổ sung', 'Giá trị tạo bổ sung']
-    
-    # Table 3: Theo GSM
-    t3_loi = df_loi.groupby('GSM phụ trách').agg(
-        SL_ST_phat_sinh=('ID ST', 'nunique'),
-        SL_tao_bo_sung=('SLbổ sung cho ST', 'sum'),
-        Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
-    ).reset_index()
-    t3_loi.columns = ['GSM phụ trách', 'SL ST phát sinh', 'SL tạo bổ sung', 'Giá trị tạo bổ sung']
-else:
-    t1_loi = pd.DataFrame()
-    t2_loi = pd.DataFrame()
-    t3_loi = pd.DataFrame()
-
 
 # Nút Tải lại dữ liệu
 if st.button('🔄 Cập nhật dữ liệu mới nhất'):
@@ -255,17 +197,71 @@ with tab2:
 
 st.write("---")
 st.subheader("🚨 5. BÁO CÁO LỖI: ST NHẬP THIẾU (Tuần 19 & 20)")
-st.markdown("*(Dữ liệu từ 04.05 - 17.05)*")
-if not t1_loi.empty:
-    st.write("**Bảng tổng hợp theo Siêu thị**")
+
+week_filter = st.selectbox("📅 Chọn Tuần:", ["Cả 2 Tuần (04.05 - 17.05)", "Tuần 19 (04.05 - 10.05)", "Tuần 20 (11.05 - 17.05)"])
+
+start_date = pd.to_datetime('2026-05-04')
+end_date = pd.to_datetime('2026-05-17')
+if week_filter == "Tuần 19 (04.05 - 10.05)":
+    end_date = pd.to_datetime('2026-05-10')
+elif week_filter == "Tuần 20 (11.05 - 17.05)":
+    start_date = pd.to_datetime('2026-05-11')
+
+df_tuan = df_may[(df_may['Ngày'] >= start_date) & (df_may['Ngày'] <= end_date)].copy()
+df_loi = df_tuan[df_tuan['Lỗi'].fillna('').str.contains('ST nhập thiếu', case=False)].copy()
+
+if not df_loi.empty:
+    df_loi['SLbổ sung cho ST'] = pd.to_numeric(df_loi['SLbổ sung cho ST'], errors='coerce').fillna(0)
+    df_loi['Tổng ST'] = pd.to_numeric(df_loi['Tổng ST'], errors='coerce').fillna(0)
+    
+    if 'GSM phụ trách' in df_loi.columns:
+        df_loi['GSM phụ trách'] = df_loi['GSM phụ trách'].astype(str).str.split('-').str[-1].str.strip()
+    else:
+        df_loi['GSM phụ trách'] = 'N/A'
+        
+    if 'RSM phụ trách' not in df_loi.columns:
+        df_loi['RSM phụ trách'] = 'N/A'
+        
+    t1_loi = df_loi.groupby(['ID ST', 'Chi nhánh nhận', 'GSM phụ trách', 'RSM phụ trách']).agg(
+        So_ngay_tao_bo_sung=('Ngày', 'nunique'),
+        Tong_SL_da_tao=('SLbổ sung cho ST', 'sum'),
+        Tong_gia_tri=('Tổng ST', 'sum')
+    ).reset_index()
+    t1_loi.columns = ['ID ST', 'Name Mart', 'GSM phụ trách', 'RSM phụ trách', 'Số ngày tạo bổ sung', 'Tổng SL đã tạo', 'Tổng giá trị']
+    
+    t2_loi = df_loi.groupby('RSM phụ trách').agg(
+        SL_ST_phat_sinh=('ID ST', 'nunique'),
+        SL_tao_bo_sung=('SLbổ sung cho ST', 'sum'),
+        Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
+    ).reset_index()
+    
+    if 'RSM phụ trách' in df_may.columns and 'GSM phụ trách' in df_may.columns:
+        df_may['GSM_tmp'] = df_may['GSM phụ trách'].astype(str).str.split('-').str[-1].str.strip()
+        gsm_per_rsm = df_may.groupby('RSM phụ trách')['GSM_tmp'].nunique().reset_index()
+        gsm_per_rsm.columns = ['RSM phụ trách', 'SL GSM quản lý']
+        t2_loi = pd.merge(t2_loi, gsm_per_rsm, on='RSM phụ trách', how='left')
+    else:
+        t2_loi['SL GSM quản lý'] = 0
+        
+    t2_loi = t2_loi[['RSM phụ trách', 'SL GSM quản lý', 'SL_ST_phat_sinh', 'SL_tao_bo_sung', 'Gia_tri_tao_bo_sung']]
+    t2_loi.columns = ['RSM phụ trách', 'SL GSM quản lý', 'SL ST phát sinh', 'SL tạo bổ sung', 'Giá trị tạo bổ sung']
+    
+    t3_loi = df_loi.groupby('GSM phụ trách').agg(
+        SL_ST_phat_sinh=('ID ST', 'nunique'),
+        SL_tao_bo_sung=('SLbổ sung cho ST', 'sum'),
+        Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
+    ).reset_index()
+    t3_loi.columns = ['GSM phụ trách', 'SL ST phát sinh', 'SL tạo bổ sung', 'Giá trị tạo bổ sung']
+
+    st.write(f"**Bảng tổng hợp theo Siêu thị ({week_filter})**")
     st.dataframe(t1_loi.style.format(format_vn), use_container_width=True)
     
     col6, col7 = st.columns(2)
     with col6:
-        st.write("**Bảng tổng hợp theo RSM**")
+        st.write(f"**Bảng tổng hợp theo RSM ({week_filter})**")
         st.dataframe(t2_loi.style.format(format_vn), use_container_width=True)
     with col7:
-        st.write("**Bảng tổng hợp theo GSM**")
+        st.write(f"**Bảng tổng hợp theo GSM ({week_filter})**")
         st.dataframe(t3_loi.style.format(format_vn), use_container_width=True)
 else:
-    st.info("Không có dữ liệu lỗi 'ST nhập thiếu' trong khoảng thời gian này.")
+    st.info(f"Không có dữ liệu lỗi 'ST nhập thiếu' trong {week_filter}.")
