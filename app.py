@@ -24,8 +24,8 @@ def load_data():
     url_may = "https://docs.google.com/spreadsheets/d/1suHerEzgKzxB7g1UbrGIZPNaxK5a96xFnmxcIQywpko/export?format=csv&gid=1422896115"
     url_apr = "https://docs.google.com/spreadsheets/d/1mYAbl4UDhjUSfr44xYdZX5YC_mG5-_9fK4tWgG8zlew/export?format=csv"
     
-    df_may = pd.read_csv(url_may, skiprows=2)
-    df_apr = pd.read_csv(url_apr, skiprows=2)
+    df_may = pd.read_csv(url_may, skiprows=2, dtype=str)
+    df_apr = pd.read_csv(url_apr, skiprows=2, dtype=str)
     
     df_may.columns = [str(c).strip() for c in df_may.columns]
     df_apr.columns = [str(c).strip() for c in df_apr.columns]
