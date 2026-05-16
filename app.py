@@ -220,6 +220,8 @@ st.subheader("🚨 5. BÁO CÁO LỖI: ST NHẬP THIẾU")
 
 week_options = [
     "Tất cả các tuần",
+    "Nguyên Tháng 4",
+    "Nguyên Tháng 5",
     "Tuần 14 (30.03 - 05.04)",
     "Tuần 15 (06.04 - 12.04)",
     "Tuần 16 (13.04 - 19.04)",
@@ -236,7 +238,13 @@ week_filter = st.selectbox("📅 Chọn Tuần:", week_options)
 start_date = pd.to_datetime('2026-03-30')
 end_date = pd.to_datetime('2026-05-31')
 
-if week_filter != "Tất cả các tuần":
+if week_filter == "Nguyên Tháng 4":
+    start_date = pd.to_datetime('2026-04-01')
+    end_date = pd.to_datetime('2026-04-30')
+elif week_filter == "Nguyên Tháng 5":
+    start_date = pd.to_datetime('2026-05-01')
+    end_date = pd.to_datetime('2026-05-31')
+elif week_filter != "Tất cả các tuần":
     date_str = week_filter.split('(')[1].split(')')[0]
     start_str, end_str = date_str.split(' - ')
     start_date = pd.to_datetime(start_str + '.2026', format='%d.%m.%Y')
@@ -284,6 +292,16 @@ if not df_loi.empty:
         Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
     ).reset_index()
     t3_loi.columns = ['GSM phụ trách', 'SL ST phát sinh', 'SL tạo bổ sung', 'Giá trị tạo bổ sung']
+
+    def append_tong_row(df_to_append, label_col):
+        if df_to_append.empty: return df_to_append
+        tong_row = df_to_append.sum(numeric_only=True).to_frame().T
+        tong_row[label_col] = 'Tổng'
+        return pd.concat([df_to_append, tong_row], ignore_index=True)
+        
+    t1_loi = append_tong_row(t1_loi, 'ID ST')
+    t2_loi = append_tong_row(t2_loi, 'RSM phụ trách')
+    t3_loi = append_tong_row(t3_loi, 'GSM phụ trách')
 
     st.write(f"**Bảng tổng hợp theo Siêu thị ({week_filter})**")
     st.dataframe(t1_loi.style.format(format_vn), use_container_width=True)
