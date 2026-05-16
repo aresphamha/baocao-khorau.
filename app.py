@@ -30,6 +30,12 @@ def load_data():
     df_may.columns = [str(c).strip() for c in df_may.columns]
     df_apr.columns = [str(c).strip() for c in df_apr.columns]
     
+    # Đồng bộ tên cột Tháng 4 cho giống với Tháng 5
+    df_apr.rename(columns={
+        'ST': 'ID ST',
+        'SL chênh lệch ĐXL': 'SL chênh lệch CXD'
+    }, inplace=True)
+    
     df = pd.concat([df_apr, df_may], ignore_index=True)
     
     for col in ['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']:
@@ -236,7 +242,7 @@ if week_filter != "Tất cả các tuần":
     start_date = pd.to_datetime(start_str + '.2026', format='%d.%m.%Y')
     end_date = pd.to_datetime(end_str + '.2026', format='%d.%m.%Y')
 
-df_tuan = df_active[(df_active['Ngày'] >= start_date) & (df_active['Ngày'] <= end_date)].copy()
+df_tuan = df_all[(df_all['Ngày'] >= start_date) & (df_all['Ngày'] <= end_date)].copy()
 df_loi = df_tuan[df_tuan['Lỗi'].fillna('').str.contains('ST nhập thiếu', case=False)].copy()
 
 if not df_loi.empty:
