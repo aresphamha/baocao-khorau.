@@ -185,27 +185,41 @@ def format_vn(val):
         return f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     return val
 
-def rename_cols_with_totals(df, tong_df):
+def create_multiindex_headers(df, tong_df):
     if df.empty or tong_df.empty: return df
-    new_cols = {}
-    for col in df.columns:
+    
+    tuples = []
+    for i, col in enumerate(df.columns):
         if col in tong_df.columns:
             val = tong_df.iloc[0][col]
             if val not in [None, 'Tổng', '', 0] and pd.notna(val):
                 if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
-                    new_cols[col] = f"{col} \n({format_vn(val)})"
+                    tuples.append((format_vn(val), col))
                 else:
-                    new_cols[col] = f"{col} \n({val})"
-    return df.rename(columns=new_cols)
+                    tuples.append((str(val), col))
+            else:
+                if i == 0:
+                    tuples.append(('TỔNG', col))
+                else:
+                    tuples.append(('', col))
+        else:
+            if i == 0:
+                tuples.append(('TỔNG', col))
+            else:
+                tuples.append(('', col))
+                
+    df_new = df.copy()
+    df_new.columns = pd.MultiIndex.from_tuples(tuples)
+    return df_new
 
-pivot_ngay_renamed = rename_cols_with_totals(pivot_ngay, tong_row_ngay)
-pivot_clv2_renamed = rename_cols_with_totals(pivot_clv2, tong_row_clv2)
+pivot_ngay_renamed = create_multiindex_headers(pivot_ngay, tong_row_ngay)
+pivot_clv2_renamed = create_multiindex_headers(pivot_clv2, tong_row_clv2)
 
 
 # Layout cho các bảng
 st.write("---")
 st.subheader("📅 1. TỔNG HỢP THEO TỪNG NGÀY")
-st.dataframe(pivot_ngay_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_ngay_renamed.columns if 'Chênh lệch' in c and 'Giá trị' not in c and 'SL line' not in c]), use_container_width=True)
+st.dataframe(pivot_ngay_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_ngay_renamed.columns if 'Chênh lệch' in c[1] and 'Giá trị' not in c[1] and 'SL line' not in c[1]]), use_container_width=True)
 
 st.write("---")
 col4, col5 = st.columns(2)
@@ -214,7 +228,7 @@ with col4:
     st.dataframe(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
 with col5:
     st.subheader("📦 3. TỔNG HỢP THEO NGÀNH HÀNG (CLV2)")
-    st.dataframe(pivot_clv2_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_clv2_renamed.columns if 'Chênh lệch' in c and 'SL' not in c]), use_container_width=True)
+    st.dataframe(pivot_clv2_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_clv2_renamed.columns if 'Chênh lệch' in c[1] and 'SL' not in c[1]]), use_container_width=True)
 
 st.write("---")
 st.subheader("🏬 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
@@ -327,9 +341,9 @@ if not df_loi.empty:
     t2_tong = create_tong_row(t2_loi, 'RSM phụ trách')
     t3_tong = create_tong_row(t3_loi, 'GSM phụ trách')
 
-    t1_renamed = rename_cols_with_totals(t1_loi, t1_tong)
-    t2_renamed = rename_cols_with_totals(t2_loi, t2_tong)
-    t3_renamed = rename_cols_with_totals(t3_loi, t3_tong)
+    t1_renamed = create_multiindex_headers(t1_loi, t1_tong)
+    t2_renamed = create_multiindex_headers(t2_loi, t2_tong)
+    t3_renamed = create_multiindex_headers(t3_loi, t3_tong)
 
     st.write(f"**Bảng tổng hợp theo Siêu thị ({week_filter})**")
     st.dataframe(t1_renamed.style.format(format_vn), use_container_width=True)
