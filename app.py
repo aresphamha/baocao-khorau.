@@ -30,7 +30,8 @@ def load_data():
             df[col] = df[col].apply(clean_number)
             
     # Tính toán cột Chênh lệch
-    df['Chênh lệch'] = df['Số lượng nhận'] - df['Số lượng chuyển']
+    # Sử dụng cột Chênh lệch gốc từ Google Sheets thay vì tính lại (Nhận - Chuyển) để đảm bảo số liệu khớp với file gốc
+    # df['Chênh lệch'] = df['Số lượng nhận'] - df['Số lượng chuyển']
     
     # Lọc số lượng dựa trên cột lý do W (Hao hụt), X (Siêu thị), Y (Kho rau / Chưa xác định)
     # W tương ứng N, X tương ứng O, Y tương ứng P
@@ -62,7 +63,7 @@ with st.spinner('Đang tải dữ liệu từ Google Sheets...'):
 
 # Process Dataframes
 # 1. Theo ngày
-pivot_ngay_sum = df_may.groupby('Ngày_str')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
+pivot_ngay_sum = df_may.groupby('Ngày_str')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tổng GT', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
 pivot_ngay_count = df_may[df_may['Chênh lệch'].abs() > 0].groupby('Ngày_str').size().rename('SL line chênh lệch')
 pivot_ngay_nhap0 = df_may[(df_may['Số lượng nhận'] == 0) & (df_may['Chênh lệch'].abs() > 0)].groupby('Ngày_str').size().rename('SL line nhập=0')
 
@@ -79,13 +80,21 @@ pivot_ngay['SL line nhập=0'] = pivot_ngay['SL line nhập=0'].astype(int)
 pivot_ngay.insert(1, 'SL line nhập=0 / chênh lệch', pivot_ngay['SL line nhập=0'].astype(str) + " / " + pivot_ngay['SL line chênh lệch'].astype(str))
 pivot_ngay = pivot_ngay.drop(columns=['SL line nhập=0', 'SL line chênh lệch'])
 
+pivot_ngay.rename(columns={
+    'Tổng GT': 'Giá trị chênh lệch (VNĐ)',
+    'BS_ST': 'SL đã tạo bs cho ST',
+    'Kho_Rau': 'SL đã xác nhận được trả kho rau',
+    'Hao hụt': 'Số lượng hao hụt',
+    'CXD': 'Số lượng chưa xác định'
+}, inplace=True)
+
 # 2. Theo CLV2
 pivot_clv2_sum = df_may.groupby('CLV2')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
 pivot_clv2_count = df_may[df_may['Chênh lệch'].abs() > 0].groupby('CLV2').size().rename('Số lượng line')
 pivot_clv2 = pivot_clv2_sum.join(pivot_clv2_count).fillna(0).reset_index()
 pivot_clv2['Số lượng line'] = pivot_clv2['Số lượng line'].astype(int)
 pivot_clv2 = pivot_clv2[['CLV2', 'Số lượng line', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']]
-pivot_clv2 = pivot_clv2.sort_values(by='Chênh lệch', ascending=True) # Sắp xếp tăng dần vì số chênh lệch thường là âm
+pivot_clv2 = pivot_clv2.sort_values(by='Chênh lệch', ascending=False) # Sắp xếp giảm dần vì số chênh lệch lớn nhất lên đầu
 tong_row_clv2 = pivot_clv2.sum(numeric_only=True).to_frame().T
 tong_row_clv2['CLV2'] = 'Tổng'
 pivot_clv2 = pd.concat([pivot_clv2, tong_row_clv2], ignore_index=True)
@@ -136,9 +145,9 @@ with col2:
 with col3:
     st.metric("TỔNG CHÊNH LỆCH", f"{pivot_clv2.iloc[-1]['Chênh lệch']:,.1f}")
 
-# Hàm format màu đỏ cho số âm
-def color_negative_red(val):
-    color = 'red' if isinstance(val, (int, float)) and val < 0 else ''
+# Hàm format màu đỏ cho số chênh lệch
+def color_red_for_chenhlech(val):
+    color = 'red' if isinstance(val, (int, float)) and val > 0 else ''
     return f'color: {color}'
 
 # Hàm format số theo chuẩn Việt Nam (1.000.000,00)
@@ -151,16 +160,16 @@ def format_vn(val):
 # Layout cho các bảng
 st.write("---")
 st.subheader("📅 1. TỔNG HỢP THEO TỪNG NGÀY")
-st.dataframe(pivot_ngay.style.format(format_vn).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
+st.dataframe(pivot_ngay.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
 
 st.write("---")
 col4, col5 = st.columns(2)
 with col4:
     st.subheader("🔥 2. TOP 5 CATE CHÊNH LỆCH LỚN NHẤT")
-    st.dataframe(pivot_clv4.style.format(format_vn).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
+    st.dataframe(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
 with col5:
     st.subheader("📦 3. TỔNG HỢP THEO NGÀNH HÀNG (CLV2)")
-    st.dataframe(pivot_clv2.style.format(format_vn).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
+    st.dataframe(pivot_clv2.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
 
 st.write("---")
 st.subheader("🏬 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
@@ -180,7 +189,7 @@ else:
 tab1, tab2 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG", "💰 Chi Tiết GIÁ TRỊ (VNĐ)"])
 
 with tab1:
-    st.dataframe(filtered_qty.style.format(format_vn).map(color_negative_red, subset=['Chênh lệch', 'Tỷ lệ (%)']), use_container_width=True, height=600)
+    st.dataframe(filtered_qty.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch', 'Tỷ lệ (%)']), use_container_width=True, height=600)
     
 with tab2:
     st.dataframe(filtered_val.style.format(format_vn), use_container_width=True, height=600)
