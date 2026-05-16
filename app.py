@@ -93,14 +93,23 @@ pivot_ngay = pivot_ngay.sort_values(by='Ngày_dt').drop(columns=['Ngày_dt'])
 
 tong_row_ngay = pivot_ngay.sum(numeric_only=True).to_frame().T
 tong_row_ngay['Ngày_str'] = 'Tổng'
-pivot_ngay = pd.concat([pivot_ngay, tong_row_ngay], ignore_index=True)
 
 pivot_ngay['SL line chênh lệch'] = pivot_ngay['SL line chênh lệch'].astype(int)
 pivot_ngay['SL line nhập=0'] = pivot_ngay['SL line nhập=0'].astype(int)
 pivot_ngay.insert(1, 'SL line nhập=0 / chênh lệch', pivot_ngay['SL line nhập=0'].astype(str) + " / " + pivot_ngay['SL line chênh lệch'].astype(str))
 pivot_ngay = pivot_ngay.drop(columns=['SL line nhập=0', 'SL line chênh lệch'])
 
+tong_row_ngay.insert(1, 'SL line nhập=0 / chênh lệch', '')
+
+
 pivot_ngay.rename(columns={
+    'Tổng GT': 'Giá trị chênh lệch (VNĐ)',
+    'BS_ST': 'SL đã tạo bs cho ST',
+    'Kho_Rau': 'SL đã xác nhận được trả kho rau',
+    'Hao hụt': 'Số lượng hao hụt',
+    'CXD': 'Số lượng chưa xác định'
+}, inplace=True)
+tong_row_ngay.rename(columns={
     'Tổng GT': 'Giá trị chênh lệch (VNĐ)',
     'BS_ST': 'SL đã tạo bs cho ST',
     'Kho_Rau': 'SL đã xác nhận được trả kho rau',
@@ -117,7 +126,6 @@ pivot_clv2 = pivot_clv2[['CLV2', 'Số lượng line', 'Số lượng chuyển',
 pivot_clv2 = pivot_clv2.sort_values(by='Chênh lệch', ascending=False) # Sắp xếp giảm dần vì số chênh lệch lớn nhất lên đầu
 tong_row_clv2 = pivot_clv2.sum(numeric_only=True).to_frame().T
 tong_row_clv2['CLV2'] = 'Tổng'
-pivot_clv2 = pd.concat([pivot_clv2, tong_row_clv2], ignore_index=True)
 
 # 3. Top 5 CLV4 (Chênh lệch lớn nhất - tính theo trị tuyệt đối)
 clv4_sum = df_active.groupby('CLV4')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum().reset_index()
@@ -181,7 +189,8 @@ def format_vn(val):
 # Layout cho các bảng
 st.write("---")
 st.subheader("📅 1. TỔNG HỢP THEO TỪNG NGÀY")
-st.dataframe(pivot_ngay.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
+st.dataframe(pivot_ngay.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True, height=400)
+st.dataframe(tong_row_ngay.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
 
 st.write("---")
 col4, col5 = st.columns(2)
@@ -190,7 +199,8 @@ with col4:
     st.dataframe(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
 with col5:
     st.subheader("📦 3. TỔNG HỢP THEO NGÀNH HÀNG (CLV2)")
-    st.dataframe(pivot_clv2.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
+    st.dataframe(pivot_clv2.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True, height=400)
+    st.dataframe(tong_row_clv2.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
 
 st.write("---")
 st.subheader("🏬 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
@@ -293,25 +303,28 @@ if not df_loi.empty:
     ).reset_index()
     t3_loi.columns = ['GSM phụ trách', 'SL ST phát sinh', 'SL tạo bổ sung', 'Giá trị tạo bổ sung']
 
-    def append_tong_row(df_to_append, label_col):
-        if df_to_append.empty: return df_to_append
+    def create_tong_row(df_to_append, label_col):
+        if df_to_append.empty: return pd.DataFrame()
         tong_row = df_to_append.sum(numeric_only=True).to_frame().T
         tong_row[label_col] = 'Tổng'
-        return pd.concat([df_to_append, tong_row], ignore_index=True)
+        return tong_row
         
-    t1_loi = append_tong_row(t1_loi, 'ID ST')
-    t2_loi = append_tong_row(t2_loi, 'RSM phụ trách')
-    t3_loi = append_tong_row(t3_loi, 'GSM phụ trách')
+    t1_tong = create_tong_row(t1_loi, 'ID ST')
+    t2_tong = create_tong_row(t2_loi, 'RSM phụ trách')
+    t3_tong = create_tong_row(t3_loi, 'GSM phụ trách')
 
     st.write(f"**Bảng tổng hợp theo Siêu thị ({week_filter})**")
-    st.dataframe(t1_loi.style.format(format_vn), use_container_width=True)
+    st.dataframe(t1_loi.style.format(format_vn), use_container_width=True, height=400)
+    if not t1_tong.empty: st.dataframe(t1_tong.style.format(format_vn), use_container_width=True)
     
     col6, col7 = st.columns(2)
     with col6:
         st.write(f"**Bảng tổng hợp theo RSM ({week_filter})**")
-        st.dataframe(t2_loi.style.format(format_vn), use_container_width=True)
+        st.dataframe(t2_loi.style.format(format_vn), use_container_width=True, height=400)
+        if not t2_tong.empty: st.dataframe(t2_tong.style.format(format_vn), use_container_width=True)
     with col7:
         st.write(f"**Bảng tổng hợp theo GSM ({week_filter})**")
-        st.dataframe(t3_loi.style.format(format_vn), use_container_width=True)
+        st.dataframe(t3_loi.style.format(format_vn), use_container_width=True, height=400)
+        if not t3_tong.empty: st.dataframe(t3_tong.style.format(format_vn), use_container_width=True)
 else:
     st.info(f"Không có dữ liệu lỗi 'ST nhập thiếu' trong {week_filter}.")
