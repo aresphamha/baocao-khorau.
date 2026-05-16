@@ -247,6 +247,11 @@ with col5:
     st.dataframe(pivot_clv2_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_clv2_renamed.columns if 'Chênh lệch' in c[1] and 'SL' not in c[1]]), use_container_width=True)
 
 st.write("---")
+
+# Bộ lọc theo ngày dùng chung cho các bảng chi tiết
+sorted_dates = [d for d in pivot_ngay['Ngày_str'] if d != 'Tổng']
+dates = ["Tất cả các ngày"] + sorted_dates
+
 st.write("---")
 st.subheader("🛒 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO NHÓM HÀNG (CLV4)")
 
@@ -389,9 +394,6 @@ with tab6:
 st.write("---")
 st.subheader("🏬 6. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
 
-# Bộ lọc theo ngày dùng chung cho cả 2 bảng
-sorted_dates = [d for d in pivot_ngay['Ngày_str'] if d != 'Tổng']
-dates = ["Tất cả các ngày"] + sorted_dates
 selected_date = st.selectbox("🔍 Lọc theo Ngày:", dates)
 
 st.write("### 📌 Đánh giá nhanh tình hình")
