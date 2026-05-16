@@ -585,6 +585,15 @@ if not df_loi.empty:
         st.write("---")
         st.write("### 📈 7. SO SÁNH TỪNG TUẦN (SỐ NGÀY, SỐ LƯỢNG, GIÁ TRỊ)")
         
+        st.write("### 📌 Đánh giá nhanh tình hình")
+        week_val_sum = df_loi_week.groupby('Tuần')['Tổng ST'].sum()
+        if not week_val_sum.empty:
+            max_week = week_val_sum.idxmax()
+            max_week_val = week_val_sum.max()
+            st.info(
+                f"🔹 **Đỉnh điểm chênh lệch (Cảnh báo Tuần)**: **{max_week}** đang là tuần ghi nhận thiệt hại chênh lệch lớn nhất toàn hệ thống với tổng giá trị lên đến **{max_week_val:,.0f} VNĐ**."
+            )
+        
         def render_comparison(df_loi_week, group_cols, index_name, section_title):
             st.write(f"**{section_title}**")
             comp_dict = create_weekly_comparison(df_loi_week, group_cols, index_name)
