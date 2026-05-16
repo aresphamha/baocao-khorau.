@@ -211,9 +211,6 @@ df_tuan = df_may[(df_may['Ngày'] >= start_date) & (df_may['Ngày'] <= end_date)
 df_loi = df_tuan[df_tuan['Lỗi'].fillna('').str.contains('ST nhập thiếu', case=False)].copy()
 
 if not df_loi.empty:
-    df_loi['SLbổ sung cho ST'] = pd.to_numeric(df_loi['SLbổ sung cho ST'], errors='coerce').fillna(0)
-    df_loi['Tổng ST'] = pd.to_numeric(df_loi['Tổng ST'], errors='coerce').fillna(0)
-    
     if 'GSM phụ trách' in df_loi.columns:
         df_loi['GSM phụ trách'] = df_loi['GSM phụ trách'].astype(str).str.split('-').str[-1].str.strip()
     else:
@@ -224,20 +221,20 @@ if not df_loi.empty:
         
     t1_loi = df_loi.groupby(['ID ST', 'Chi nhánh nhận', 'GSM phụ trách', 'RSM phụ trách']).agg(
         So_ngay_tao_bo_sung=('Ngày', 'nunique'),
-        Tong_SL_da_tao=('SLbổ sung cho ST', 'sum'),
+        Tong_SL_da_tao=('Qty_O', 'sum'),
         Tong_gia_tri=('Tổng ST', 'sum')
     ).reset_index()
     t1_loi.columns = ['ID ST', 'Name Mart', 'GSM phụ trách', 'RSM phụ trách', 'Số ngày tạo bổ sung', 'Tổng SL đã tạo', 'Tổng giá trị']
     
     t2_loi = df_loi.groupby('RSM phụ trách').agg(
         SL_ST_phat_sinh=('ID ST', 'nunique'),
-        SL_tao_bo_sung=('SLbổ sung cho ST', 'sum'),
+        SL_tao_bo_sung=('Qty_O', 'sum'),
         Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
     ).reset_index()
     
-    if 'RSM phụ trách' in df_may.columns and 'GSM phụ trách' in df_may.columns:
-        df_may['GSM_tmp'] = df_may['GSM phụ trách'].astype(str).str.split('-').str[-1].str.strip()
-        gsm_per_rsm = df_may.groupby('RSM phụ trách')['GSM_tmp'].nunique().reset_index()
+    if 'RSM phụ trách' in df_tuan.columns and 'GSM phụ trách' in df_tuan.columns:
+        df_tuan['GSM_tmp'] = df_tuan['GSM phụ trách'].astype(str).str.split('-').str[-1].str.strip()
+        gsm_per_rsm = df_tuan.groupby('RSM phụ trách')['GSM_tmp'].nunique().reset_index()
         gsm_per_rsm.columns = ['RSM phụ trách', 'SL GSM quản lý']
         t2_loi = pd.merge(t2_loi, gsm_per_rsm, on='RSM phụ trách', how='left')
     else:
@@ -248,7 +245,7 @@ if not df_loi.empty:
     
     t3_loi = df_loi.groupby('GSM phụ trách').agg(
         SL_ST_phat_sinh=('ID ST', 'nunique'),
-        SL_tao_bo_sung=('SLbổ sung cho ST', 'sum'),
+        SL_tao_bo_sung=('Qty_O', 'sum'),
         Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
     ).reset_index()
     t3_loi.columns = ['GSM phụ trách', 'SL ST phát sinh', 'SL tạo bổ sung', 'Giá trị tạo bổ sung']
