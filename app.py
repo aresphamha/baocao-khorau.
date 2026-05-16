@@ -65,6 +65,9 @@ def load_data():
     
     df = df[df['Ngày'].notna()]
     
+    # Tạo cột hiển thị SKU
+    df['SKU_Full'] = df['Mã hàng'].astype(str) + " - " + df['Tên hàng'].astype(str)
+    
     return df
 
 # Load Data
@@ -94,12 +97,7 @@ pivot_ngay = pivot_ngay.sort_values(by='Ngày_dt').drop(columns=['Ngày_dt'])
 tong_row_ngay = pivot_ngay.sum(numeric_only=True).to_frame().T
 tong_row_ngay['Ngày_str'] = 'Tổng'
 
-pivot_ngay['SL line chênh lệch'] = pivot_ngay['SL line chênh lệch'].astype(int)
-pivot_ngay['SL line nhập=0'] = pivot_ngay['SL line nhập=0'].astype(int)
-pivot_ngay.insert(1, 'SL SKU NHẬP = 0/SL SKU CHÊNH LỆCH', pivot_ngay['SL line nhập=0'].astype(str) + " / " + pivot_ngay['SL line chênh lệch'].astype(str))
 pivot_ngay = pivot_ngay.drop(columns=['SL line nhập=0', 'SL line chênh lệch'])
-
-tong_row_ngay.insert(1, 'SL SKU NHẬP = 0/SL SKU CHÊNH LỆCH', '')
 
 pivot_ngay.rename(columns={
     'Tổng GT': 'Giá trị chênh lệch (VNĐ)',
@@ -249,47 +247,8 @@ with col5:
     st.dataframe(pivot_clv2_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_clv2_renamed.columns if 'Chênh lệch' in c[1] and 'SL' not in c[1]]), use_container_width=True)
 
 st.write("---")
-st.subheader("🏬 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
-
-# Bộ lọc theo ngày dùng chung cho cả 2 bảng
-sorted_dates = [d for d in pivot_ngay['Ngày_str'] if d != 'Tổng']
-dates = ["Tất cả các ngày"] + sorted_dates
-selected_date = st.selectbox("🔍 Lọc theo Ngày:", dates)
-
-st.write("### 📌 Đánh giá nhanh tình hình")
-if not pivot_qty.empty and not pivot_val_sum.empty:
-    top_st_qty = pivot_qty.sort_values(by='Chênh lệch', ascending=False).iloc[0] if selected_date == "Tất cả các ngày" else pivot_qty[pivot_qty['Ngày_str'] == selected_date].sort_values(by='Chênh lệch', ascending=False).iloc[0] if not pivot_qty[pivot_qty['Ngày_str'] == selected_date].empty else None
-    top_st_val = pivot_val_sum.sort_values(by='Giá trị chênh lệch (VNĐ)', ascending=False).iloc[0] if selected_date == "Tất cả các ngày" else pivot_val_sum[pivot_val_sum['Ngày_str'] == selected_date].sort_values(by='Giá trị chênh lệch (VNĐ)', ascending=False).iloc[0] if not pivot_val_sum[pivot_val_sum['Ngày_str'] == selected_date].empty else None
-    
-    if top_st_qty is not None and top_st_val is not None:
-        st.info(
-            f"🔹 **ST chênh lệch số lượng lớn nhất**: **{top_st_qty['Chi nhánh nhận']}** (Chênh lệch {top_st_qty['Chênh lệch']:,.2f} item).\n\n"
-            f"🔹 **ST chênh lệch giá trị lớn nhất**: **{top_st_val['Chi nhánh nhận']}** (Giá trị chênh lệch {top_st_val['Giá trị chênh lệch (VNĐ)']:,.0f} VNĐ)."
-        )
-
-if selected_date != "Tất cả các ngày":
-    filtered_qty = pivot_qty[pivot_qty['Ngày_str'] == selected_date]
-    filtered_val = pivot_val_sum[pivot_val_sum['Ngày_str'] == selected_date]
-else:
-    filtered_qty = pivot_qty
-    filtered_val = pivot_val_sum
-
-tong_qty = pd.DataFrame() if filtered_qty.empty else filtered_qty.sum(numeric_only=True).to_frame().T
-if not tong_qty.empty: tong_qty['Ngày_str'] = 'Tổng'
-filtered_qty_renamed = create_multiindex_headers(filtered_qty, tong_qty)
-
-tong_val = pd.DataFrame() if filtered_val.empty else filtered_val.sum(numeric_only=True).to_frame().T
-if not tong_val.empty: tong_val['Ngày_str'] = 'Tổng'
-filtered_val_renamed = create_multiindex_headers(filtered_val, tong_val)
-
-tab1, tab2 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG", "💰 Chi Tiết GIÁ TRỊ (VNĐ)"])
-
-with tab2:
-    st.dataframe(filtered_val_renamed.style.format(format_vn), use_container_width=True, height=600)
-
-# --- 5. CHI TIẾT MÃ HÀNG ---
 st.write("---")
-st.subheader("🛒 5. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO MÃ HÀNG")
+st.subheader("🛒 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO NHÓM HÀNG (CLV4)")
 
 item_qty_sum = df_active.groupby(['Ngày_str', 'CLV4'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
 item_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'CLV4']).size().rename('SL ST chênh lệch')
@@ -357,8 +316,120 @@ with tab3:
 with tab4:
     st.dataframe(filtered_val_item_renamed.style.format(format_vn), use_container_width=True, height=600)
 
+# --- 6. CHI TIẾT MÃ HÀNG (SKU) ---
 st.write("---")
-st.subheader("🚨 6. BÁO CÁO LỖI: ST NHẬP THIẾU")
+st.subheader("🏷️ 5. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO MÃ HÀNG (SKU)")
+
+sku_qty_sum = df_active.groupby(['Ngày_str', 'SKU_Full'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
+sku_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'SKU_Full']).size().rename('SL ST chênh lệch')
+sku_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'SKU_Full']).size().rename('SL ST nhập=0')
+
+pivot_qty_sku = sku_qty_sum.join(sku_qty_count).join(sku_qty_nhap0).fillna(0).reset_index()
+
+if 'SL ST chênh lệch' not in pivot_qty_sku.columns:
+    pivot_qty_sku['SL ST chênh lệch'] = 0
+if 'SL ST nhập=0' not in pivot_qty_sku.columns:
+    pivot_qty_sku['SL ST nhập=0'] = 0
+
+pivot_qty_sku['SL ST chênh lệch'] = pivot_qty_sku['SL ST chênh lệch'].astype(int)
+pivot_qty_sku['SL ST nhập=0'] = pivot_qty_sku['SL ST nhập=0'].astype(int)
+pivot_qty_sku.insert(2, 'SL ST NHẬP = 0/SL ST CHÊNH LỆCH', pivot_qty_sku['SL ST nhập=0'].astype(str) + " / " + pivot_qty_sku['SL ST chênh lệch'].astype(str))
+
+pivot_qty_sku.rename(columns={
+    'SKU_Full': 'Mã hàng (SKU)',
+    'BS_ST': 'SL đã tạo bs cho ST',
+    'Kho_Rau': 'SL đã xác nhận được trả kho rau',
+    'Hao hụt': 'Số lượng hao hụt',
+    'CXD': 'Số lượng chưa xác định'
+}, inplace=True)
+pivot_qty_sku['Tỷ lệ (%)'] = np.where(pivot_qty_sku['Số lượng chuyển'] > 0, (pivot_qty_sku['Chênh lệch'] / pivot_qty_sku['Số lượng chuyển']) * 100, 0)
+pivot_qty_sku['Abs_ChenhLech'] = pivot_qty_sku['Chênh lệch'].abs()
+pivot_qty_sku = pivot_qty_sku.sort_values(by='Abs_ChenhLech', ascending=False).drop(columns=['Abs_ChenhLech'])
+pivot_qty_sku = pivot_qty_sku[['Ngày_str', 'Mã hàng (SKU)', 'SL ST NHẬP = 0/SL ST CHÊNH LỆCH', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tỷ lệ (%)', 'SL đã tạo bs cho ST', 'SL đã xác nhận được trả kho rau', 'Số lượng hao hụt', 'Số lượng chưa xác định']]
+
+pivot_val_sku = df_active.groupby(['Ngày_str', 'SKU_Full'])[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
+pivot_val_sku.rename(columns={'Tổng GT': 'Giá trị chênh lệch (VNĐ)', 'SKU_Full': 'Mã hàng (SKU)'}, inplace=True)
+
+selected_date_sku = st.selectbox("🔍 Lọc theo Ngày (SKU):", dates)
+
+st.write("### 📌 Đánh giá nhanh tình hình")
+if not pivot_qty_sku.empty and not pivot_val_sku.empty:
+    top_sku_qty = pivot_qty_sku.sort_values(by='Chênh lệch', ascending=False).iloc[0] if selected_date_sku == "Tất cả các ngày" else pivot_qty_sku[pivot_qty_sku['Ngày_str'] == selected_date_sku].sort_values(by='Chênh lệch', ascending=False).iloc[0] if not pivot_qty_sku[pivot_qty_sku['Ngày_str'] == selected_date_sku].empty else None
+    top_sku_val = pivot_val_sku.sort_values(by='Giá trị chênh lệch (VNĐ)', ascending=False).iloc[0] if selected_date_sku == "Tất cả các ngày" else pivot_val_sku[pivot_val_sku['Ngày_str'] == selected_date_sku].sort_values(by='Giá trị chênh lệch (VNĐ)', ascending=False).iloc[0] if not pivot_val_sku[pivot_val_sku['Ngày_str'] == selected_date_sku].empty else None
+    
+    if top_sku_qty is not None and top_sku_val is not None:
+        st.info(
+            f"🔹 **Mã hàng chênh lệch số lượng lớn nhất**: **{top_sku_qty['Mã hàng (SKU)']}** (Chênh lệch {top_sku_qty['Chênh lệch']:,.2f} item).\n\n"
+            f"🔹 **Mã hàng chênh lệch giá trị lớn nhất**: **{top_sku_val['Mã hàng (SKU)']}** (Giá trị chênh lệch {top_sku_val['Giá trị chênh lệch (VNĐ)']:,.0f} VNĐ)."
+        )
+
+if selected_date_sku != "Tất cả các ngày":
+    filtered_qty_sku = pivot_qty_sku[pivot_qty_sku['Ngày_str'] == selected_date_sku]
+    filtered_val_sku = pivot_val_sku[pivot_val_sku['Ngày_str'] == selected_date_sku]
+else:
+    filtered_qty_sku = pivot_qty_sku
+    filtered_val_sku = pivot_val_sku
+
+tong_qty_sku = pd.DataFrame() if filtered_qty_sku.empty else filtered_qty_sku.sum(numeric_only=True).to_frame().T
+if not tong_qty_sku.empty: tong_qty_sku['Ngày_str'] = 'Tổng'
+filtered_qty_sku_renamed = create_multiindex_headers(filtered_qty_sku, tong_qty_sku)
+
+tong_val_sku = pd.DataFrame() if filtered_val_sku.empty else filtered_val_sku.sum(numeric_only=True).to_frame().T
+if not tong_val_sku.empty: tong_val_sku['Ngày_str'] = 'Tổng'
+filtered_val_sku_renamed = create_multiindex_headers(filtered_val_sku, tong_val_sku)
+
+tab5, tab6 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG (SKU)", "💰 Chi Tiết GIÁ TRỊ (SKU)"])
+
+with tab5:
+    st.dataframe(filtered_qty_sku_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_sku_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), use_container_width=True, height=600)
+    
+with tab6:
+    st.dataframe(filtered_val_sku_renamed.style.format(format_vn), use_container_width=True, height=600)
+
+st.write("---")
+st.subheader("🏬 6. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
+
+# Bộ lọc theo ngày dùng chung cho cả 2 bảng
+sorted_dates = [d for d in pivot_ngay['Ngày_str'] if d != 'Tổng']
+dates = ["Tất cả các ngày"] + sorted_dates
+selected_date = st.selectbox("🔍 Lọc theo Ngày:", dates)
+
+st.write("### 📌 Đánh giá nhanh tình hình")
+if not pivot_qty.empty and not pivot_val_sum.empty:
+    top_st_qty = pivot_qty.sort_values(by='Chênh lệch', ascending=False).iloc[0] if selected_date == "Tất cả các ngày" else pivot_qty[pivot_qty['Ngày_str'] == selected_date].sort_values(by='Chênh lệch', ascending=False).iloc[0] if not pivot_qty[pivot_qty['Ngày_str'] == selected_date].empty else None
+    top_st_val = pivot_val_sum.sort_values(by='Giá trị chênh lệch (VNĐ)', ascending=False).iloc[0] if selected_date == "Tất cả các ngày" else pivot_val_sum[pivot_val_sum['Ngày_str'] == selected_date].sort_values(by='Giá trị chênh lệch (VNĐ)', ascending=False).iloc[0] if not pivot_val_sum[pivot_val_sum['Ngày_str'] == selected_date].empty else None
+    
+    if top_st_qty is not None and top_st_val is not None:
+        st.info(
+            f"🔹 **ST chênh lệch số lượng lớn nhất**: **{top_st_qty['Chi nhánh nhận']}** (Chênh lệch {top_st_qty['Chênh lệch']:,.2f} item).\n\n"
+            f"🔹 **ST chênh lệch giá trị lớn nhất**: **{top_st_val['Chi nhánh nhận']}** (Giá trị chênh lệch {top_st_val['Giá trị chênh lệch (VNĐ)']:,.0f} VNĐ)."
+        )
+
+if selected_date != "Tất cả các ngày":
+    filtered_qty = pivot_qty[pivot_qty['Ngày_str'] == selected_date]
+    filtered_val = pivot_val_sum[pivot_val_sum['Ngày_str'] == selected_date]
+else:
+    filtered_qty = pivot_qty
+    filtered_val = pivot_val_sum
+
+tong_qty = pd.DataFrame() if filtered_qty.empty else filtered_qty.sum(numeric_only=True).to_frame().T
+if not tong_qty.empty: tong_qty['Ngày_str'] = 'Tổng'
+filtered_qty_renamed = create_multiindex_headers(filtered_qty, tong_qty)
+
+tong_val = pd.DataFrame() if filtered_val.empty else filtered_val.sum(numeric_only=True).to_frame().T
+if not tong_val.empty: tong_val['Ngày_str'] = 'Tổng'
+filtered_val_renamed = create_multiindex_headers(filtered_val, tong_val)
+
+tab1, tab2 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG", "💰 Chi Tiết GIÁ TRỊ (VNĐ)"])
+
+with tab1:
+    st.dataframe(filtered_qty_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), use_container_width=True, height=600)
+
+with tab2:
+    st.dataframe(filtered_val_renamed.style.format(format_vn), use_container_width=True, height=600)
+
+# --- 5. CHI TIẾT NHÓM HÀNG (CLV4) ---
+st.subheader("🚨 7. BÁO CÁO LỖI: ST NHẬP THIẾU")
 
 week_options = [
     "Tất cả các tuần",
@@ -493,44 +564,36 @@ if not df_loi.empty:
     
     if not df_loi_week['Tuần'].isna().all():
         def create_weekly_comparison(df, group_cols, index_name):
-            pivot = df.groupby(group_cols + ['Tuần']).agg(
-                So_ngay_tao_bo_sung=('Ngày', 'nunique'),
-                Tong_SL_da_tao=('Qty_O', 'sum'),
-                Tong_gia_tri=('Tổng ST', 'sum')
-            ).unstack(fill_value=0).reset_index()
-            
-            new_cols = []
-            for col in pivot.columns:
-                if col[0] in group_cols:
-                    new_cols.append(col[0])
-                else:
-                    metric_name = "Số ngày tạo BS" if col[0] == 'So_ngay_tao_bo_sung' else "SL tạo BS" if col[0] == 'Tong_SL_da_tao' else "Giá trị (VNĐ)"
-                    new_cols.append(f"{col[1]} - {metric_name}")
-            pivot.columns = new_cols
-            
-            # Sort columns to group by Week then Metric
-            cols_metadata = group_cols
-            cols_data = sorted([c for c in pivot.columns if c not in group_cols])
-            pivot = pivot[cols_metadata + cols_data]
-            
-            t_tong = create_tong_row(pivot, index_name)
-            t_renamed = create_multiindex_headers(pivot, t_tong)
-            return t_renamed
+            res = {}
+            metrics = {
+                '📅 Số ngày tạo BS': ('Ngày', 'nunique'),
+                '📦 SL tạo BS': ('Qty_O', 'sum'),
+                '💰 Giá trị tạo BS (VNĐ)': ('Tổng ST', 'sum')
+            }
+            for title, (col, agg) in metrics.items():
+                pivot = df.pivot_table(index=group_cols, columns='Tuần', values=col, aggfunc=agg, fill_value=0)
+                weeks = sorted(list(pivot.columns))
+                pivot = pivot[weeks]
+                
+                tong_row = pivot.sum(numeric_only=True).to_frame().T
+                t_renamed = create_multiindex_headers(pivot, tong_row)
+                res[title] = t_renamed
+            return res
 
         st.write("---")
-        st.write("### 📈 SO SÁNH TỪNG TUẦN (SỐ NGÀY, SỐ LƯỢNG, GIÁ TRỊ)")
+        st.write("### 📈 7. SO SÁNH TỪNG TUẦN (SỐ NGÀY, SỐ LƯỢNG, GIÁ TRỊ)")
         
-        comp_rsm = create_weekly_comparison(df_loi_week, ['RSM phụ trách'], 'RSM phụ trách')
-        st.write(f"**6.1 So sánh từng tuần theo RSM ({week_filter})**")
-        st.dataframe(comp_rsm.style.format(format_vn), use_container_width=True)
+        def render_comparison(df_loi_week, group_cols, index_name, section_title):
+            st.write(f"**{section_title}**")
+            comp_dict = create_weekly_comparison(df_loi_week, group_cols, index_name)
+            tabs = st.tabs(list(comp_dict.keys()))
+            for tab, (title, df_comp) in zip(tabs, comp_dict.items()):
+                with tab:
+                    st.dataframe(df_comp.style.format(format_vn), use_container_width=True)
 
-        comp_gsm = create_weekly_comparison(df_loi_week, ['GSM phụ trách'], 'GSM phụ trách')
-        st.write(f"**6.2 So sánh từng tuần theo GSM ({week_filter})**")
-        st.dataframe(comp_gsm.style.format(format_vn), use_container_width=True)
-
-        comp_st = create_weekly_comparison(df_loi_week, ['ID ST', 'Chi nhánh nhận'], 'ID ST')
-        st.write(f"**6.3 So sánh từng tuần theo Siêu Thị ({week_filter})**")
-        st.dataframe(comp_st.style.format(format_vn), use_container_width=True)
+        render_comparison(df_loi_week, ['RSM phụ trách'], 'RSM phụ trách', f"7.1 So sánh từng tuần theo RSM ({week_filter})")
+        render_comparison(df_loi_week, ['GSM phụ trách'], 'GSM phụ trách', f"7.2 So sánh từng tuần theo GSM ({week_filter})")
+        render_comparison(df_loi_week, ['ID ST', 'Chi nhánh nhận'], 'ID ST', f"7.3 So sánh từng tuần theo Siêu Thị ({week_filter})")
 
 else:
     st.info(f"Không có dữ liệu lỗi 'ST nhập thiếu' trong {week_filter}.")
