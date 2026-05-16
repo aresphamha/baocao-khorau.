@@ -194,17 +194,17 @@ def create_multiindex_headers(df, tong_df):
             val = tong_df.iloc[0][col]
             if val not in [None, 'Tổng', '', 0] and pd.notna(val):
                 if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
-                    tuples.append((format_vn(val), col))
+                    tuples.append((f"🟡 {format_vn(val)}", col))
                 else:
-                    tuples.append((str(val), col))
+                    tuples.append((f"🟡 {str(val)}", col))
             else:
                 if i == 0:
-                    tuples.append(('TỔNG', col))
+                    tuples.append(('⭐ TỔNG', col))
                 else:
                     tuples.append(('', col))
         else:
             if i == 0:
-                tuples.append(('TỔNG', col))
+                tuples.append(('⭐ TỔNG', col))
             else:
                 tuples.append(('', col))
                 
@@ -245,13 +245,21 @@ else:
     filtered_qty = pivot_qty
     filtered_val = pivot_val_sum
 
+tong_qty = pd.DataFrame() if filtered_qty.empty else filtered_qty.sum(numeric_only=True).to_frame().T
+if not tong_qty.empty: tong_qty['Ngày_str'] = 'Tổng'
+filtered_qty_renamed = create_multiindex_headers(filtered_qty, tong_qty)
+
+tong_val = pd.DataFrame() if filtered_val.empty else filtered_val.sum(numeric_only=True).to_frame().T
+if not tong_val.empty: tong_val['Ngày_str'] = 'Tổng'
+filtered_val_renamed = create_multiindex_headers(filtered_val, tong_val)
+
 tab1, tab2 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG", "💰 Chi Tiết GIÁ TRỊ (VNĐ)"])
 
 with tab1:
-    st.dataframe(filtered_qty.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch', 'Tỷ lệ (%)']), use_container_width=True, height=600)
+    st.dataframe(filtered_qty_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), use_container_width=True, height=600)
     
 with tab2:
-    st.dataframe(filtered_val.style.format(format_vn), use_container_width=True, height=600)
+    st.dataframe(filtered_val_renamed.style.format(format_vn), use_container_width=True, height=600)
 
 st.write("---")
 st.subheader("🚨 5. BÁO CÁO LỖI: ST NHẬP THIẾU")
