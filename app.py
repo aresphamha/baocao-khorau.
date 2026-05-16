@@ -62,12 +62,22 @@ with st.spinner('Đang tải dữ liệu từ Google Sheets...'):
 
 # Process Dataframes
 # 1. Theo ngày
-pivot_ngay = df_may.groupby('Ngày_str')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum().reset_index()
+pivot_ngay_sum = df_may.groupby('Ngày_str')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
+pivot_ngay_count = df_may[df_may['Chênh lệch'].abs() > 0].groupby('Ngày_str').size().rename('SL line chênh lệch')
+pivot_ngay_nhap0 = df_may[(df_may['Số lượng nhận'] == 0) & (df_may['Chênh lệch'].abs() > 0)].groupby('Ngày_str').size().rename('SL line nhập=0')
+
+pivot_ngay = pivot_ngay_sum.join(pivot_ngay_count).join(pivot_ngay_nhap0).fillna(0).reset_index()
 pivot_ngay['Ngày_dt'] = pd.to_datetime(pivot_ngay['Ngày_str'], format='%d/%m/%Y', errors='coerce')
 pivot_ngay = pivot_ngay.sort_values(by='Ngày_dt').drop(columns=['Ngày_dt'])
+
 tong_row_ngay = pivot_ngay.sum(numeric_only=True).to_frame().T
 tong_row_ngay['Ngày_str'] = 'Tổng'
 pivot_ngay = pd.concat([pivot_ngay, tong_row_ngay], ignore_index=True)
+
+pivot_ngay['SL line chênh lệch'] = pivot_ngay['SL line chênh lệch'].astype(int)
+pivot_ngay['SL line nhập=0'] = pivot_ngay['SL line nhập=0'].astype(int)
+pivot_ngay.insert(1, 'SL line nhập=0 / chênh lệch', pivot_ngay['SL line nhập=0'].astype(str) + " / " + pivot_ngay['SL line chênh lệch'].astype(str))
+pivot_ngay = pivot_ngay.drop(columns=['SL line nhập=0', 'SL line chênh lệch'])
 
 # 2. Theo CLV2
 pivot_clv2_sum = df_may.groupby('CLV2')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
@@ -87,9 +97,14 @@ pivot_clv4 = clv4_sum.sort_values(by='Abs_ChenhLech', ascending=False).drop(colu
 
 # 4A. Bảng SỐ LƯỢNG Chi tiết Từng Ngày - Siêu Thị
 pivot_qty_sum = df_may.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
-pivot_qty_count = df_may[df_may['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('Số lượng line')
-pivot_qty = pivot_qty_sum.join(pivot_qty_count).fillna(0).reset_index()
-pivot_qty['Số lượng line'] = pivot_qty['Số lượng line'].astype(int)
+pivot_qty_count = df_may[df_may['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line chênh lệch')
+pivot_qty_nhap0 = df_may[(df_may['Số lượng nhận'] == 0) & (df_may['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line nhập=0')
+
+pivot_qty = pivot_qty_sum.join(pivot_qty_count).join(pivot_qty_nhap0).fillna(0).reset_index()
+pivot_qty['SL line chênh lệch'] = pivot_qty['SL line chênh lệch'].astype(int)
+pivot_qty['SL line nhập=0'] = pivot_qty['SL line nhập=0'].astype(int)
+pivot_qty.insert(3, 'SL line nhập=0 / chênh lệch', pivot_qty['SL line nhập=0'].astype(str) + " / " + pivot_qty['SL line chênh lệch'].astype(str))
+
 pivot_qty.rename(columns={
     'BS_ST': 'SL đã tạo bs cho ST',
     'Kho_Rau': 'SL đã xác nhận được trả kho rau',
@@ -100,7 +115,7 @@ pivot_qty['Tỷ lệ (%)'] = np.where(pivot_qty['Số lượng chuyển'] > 0, (
 pivot_qty['% CXD'] = np.where(pivot_qty['Chênh lệch'].abs() > 0, (pivot_qty['Số lượng chưa xác định'] / pivot_qty['Chênh lệch'].abs()) * 100, 0)
 pivot_qty['Abs_ChenhLech'] = pivot_qty['Chênh lệch'].abs()
 pivot_qty = pivot_qty.sort_values(by='Abs_ChenhLech', ascending=False).drop(columns=['Abs_ChenhLech'])
-pivot_qty = pivot_qty[['Ngày_str', 'ID ST', 'Chi nhánh nhận', 'Số lượng line', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tỷ lệ (%)', 'SL đã tạo bs cho ST', 'SL đã xác nhận được trả kho rau', 'Số lượng hao hụt', 'Số lượng chưa xác định', '% CXD']]
+pivot_qty = pivot_qty[['Ngày_str', 'ID ST', 'Chi nhánh nhận', 'SL line nhập=0 / chênh lệch', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tỷ lệ (%)', 'SL đã tạo bs cho ST', 'SL đã xác nhận được trả kho rau', 'Số lượng hao hụt', 'Số lượng chưa xác định', '% CXD']]
 
 # 4B. Bảng GIÁ TRỊ Chi tiết Từng Ngày - Siêu Thị
 pivot_val_sum = df_may.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
@@ -126,19 +141,26 @@ def color_negative_red(val):
     color = 'red' if isinstance(val, (int, float)) and val < 0 else ''
     return f'color: {color}'
 
+# Hàm format số theo chuẩn Việt Nam (1.000.000,00)
+def format_vn(val):
+    if isinstance(val, (int, float)):
+        # Format chuẩn tiếng anh 1,234.56 -> đổi chéo phẩy và chấm
+        return f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    return val
+
 # Layout cho các bảng
 st.write("---")
 st.subheader("📅 1. TỔNG HỢP THEO TỪNG NGÀY")
-st.dataframe(pivot_ngay.style.format(precision=2).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
+st.dataframe(pivot_ngay.style.format(format_vn).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
 
 st.write("---")
 col4, col5 = st.columns(2)
 with col4:
     st.subheader("🔥 2. TOP 5 CATE CHÊNH LỆCH LỚN NHẤT")
-    st.dataframe(pivot_clv4.style.format(precision=2).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
+    st.dataframe(pivot_clv4.style.format(format_vn).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
 with col5:
     st.subheader("📦 3. TỔNG HỢP THEO NGÀNH HÀNG (CLV2)")
-    st.dataframe(pivot_clv2.style.format(precision=2).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
+    st.dataframe(pivot_clv2.style.format(format_vn).map(color_negative_red, subset=['Chênh lệch']), use_container_width=True)
 
 st.write("---")
 st.subheader("🏬 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
@@ -158,7 +180,7 @@ else:
 tab1, tab2 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG", "💰 Chi Tiết GIÁ TRỊ (VNĐ)"])
 
 with tab1:
-    st.dataframe(filtered_qty.style.format(precision=2).map(color_negative_red, subset=['Chênh lệch', 'Tỷ lệ (%)']), use_container_width=True, height=600)
+    st.dataframe(filtered_qty.style.format(format_vn).map(color_negative_red, subset=['Chênh lệch', 'Tỷ lệ (%)']), use_container_width=True, height=600)
     
 with tab2:
-    st.dataframe(filtered_val.style.format(precision=2), use_container_width=True, height=600)
+    st.dataframe(filtered_val.style.format(format_vn), use_container_width=True, height=600)
