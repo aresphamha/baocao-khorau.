@@ -21,9 +21,16 @@ def clean_number(x):
 
 @st.cache_data(ttl=600)  # Tự động tải lại sau mỗi 10 phút nếu có người truy cập
 def load_data():
-    csv_url = "https://docs.google.com/spreadsheets/d/1suHerEzgKzxB7g1UbrGIZPNaxK5a96xFnmxcIQywpko/export?format=csv&gid=1422896115"
-    df = pd.read_csv(csv_url, skiprows=2)
-    df.columns = [str(c).strip() for c in df.columns]
+    url_may = "https://docs.google.com/spreadsheets/d/1suHerEzgKzxB7g1UbrGIZPNaxK5a96xFnmxcIQywpko/export?format=csv&gid=1422896115"
+    url_apr = "https://docs.google.com/spreadsheets/d/1mYAbl4UDhjUSfr44xYdZX5YC_mG5-_9fK4tWgG8zlew/export?format=csv"
+    
+    df_may = pd.read_csv(url_may, skiprows=2)
+    df_apr = pd.read_csv(url_apr, skiprows=2)
+    
+    df_may.columns = [str(c).strip() for c in df_may.columns]
+    df_apr.columns = [str(c).strip() for c in df_apr.columns]
+    
+    df = pd.concat([df_apr, df_may], ignore_index=True)
     
     for col in ['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']:
         if col in df.columns:
@@ -32,10 +39,6 @@ def load_data():
     if 'Chi nhánh nhận' in df.columns:
         df['Chi nhánh nhận'] = df['Chi nhánh nhận'].astype(str).str.replace(',', '.', regex=False)
             
-    # Tính toán cột Chênh lệch
-    # Sử dụng cột Chênh lệch gốc từ Google Sheets thay vì tính lại (Nhận - Chuyển) để đảm bảo số liệu khớp với file gốc
-    # df['Chênh lệch'] = df['Số lượng nhận'] - df['Số lượng chuyển']
-    
     # Lọc số lượng dựa trên cột lý do W (Hao hụt), X (Siêu thị), Y (Kho rau / Chưa xác định)
     # W tương ứng N, X tương ứng O, Y tương ứng P
     df['LyDo_W'] = df['Hao hụt'].astype(str).str.strip().str.lower()
@@ -52,23 +55,31 @@ def load_data():
     df['CXD'] = np.where(df['LyDo_Y'].str.contains('chưa xác định'), df['Qty_P'], 0)
             
     df['Ngày'] = pd.to_datetime(df['Ngày chuyển hàng'], format='%m/%d/%Y', errors='coerce')
-    df_may = df[df['Ngày'].dt.month == 5].copy()
-    if df_may.empty:
-        df_may = df.copy()
-        
-    df_may['Ngày_str'] = df_may['Ngày'].dt.strftime('%d/%m/%Y').fillna(df_may['Ngày chuyển hàng'])
+    df['Ngày_str'] = df['Ngày'].dt.strftime('%d/%m/%Y').fillna(df['Ngày chuyển hàng'])
     
-    return df_may
+    df = df[df['Ngày'].notna()]
+    
+    return df
 
 # Load Data
 with st.spinner('Đang tải dữ liệu từ Google Sheets...'):
-    df_may = load_data()
+    df_all = load_data()
+
+st.write("---")
+month_filter_global = st.radio("🗓️ **CHỌN THÁNG BÁO CÁO:**", ["Tháng 4", "Tháng 5", "Cả 2 tháng (T4 & T5)"], index=1, horizontal=True)
+
+if month_filter_global == "Tháng 4":
+    df_active = df_all[df_all['Ngày'].dt.month == 4].copy()
+elif month_filter_global == "Tháng 5":
+    df_active = df_all[df_all['Ngày'].dt.month == 5].copy()
+else:
+    df_active = df_all.copy()
 
 # Process Dataframes
 # 1. Theo ngày
-pivot_ngay_sum = df_may.groupby('Ngày_str')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tổng GT', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
-pivot_ngay_count = df_may[df_may['Chênh lệch'].abs() > 0].groupby('Ngày_str').size().rename('SL line chênh lệch')
-pivot_ngay_nhap0 = df_may[(df_may['Số lượng nhận'] == 0) & (df_may['Chênh lệch'].abs() > 0)].groupby('Ngày_str').size().rename('SL line nhập=0')
+pivot_ngay_sum = df_active.groupby('Ngày_str')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tổng GT', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
+pivot_ngay_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby('Ngày_str').size().rename('SL line chênh lệch')
+pivot_ngay_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby('Ngày_str').size().rename('SL line nhập=0')
 
 pivot_ngay = pivot_ngay_sum.join(pivot_ngay_count).join(pivot_ngay_nhap0).fillna(0).reset_index()
 pivot_ngay['Ngày_dt'] = pd.to_datetime(pivot_ngay['Ngày_str'], format='%d/%m/%Y', errors='coerce')
@@ -92,8 +103,8 @@ pivot_ngay.rename(columns={
 }, inplace=True)
 
 # 2. Theo CLV2
-pivot_clv2_sum = df_may.groupby('CLV2')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
-pivot_clv2_count = df_may[df_may['Chênh lệch'].abs() > 0].groupby('CLV2').size().rename('Số lượng line')
+pivot_clv2_sum = df_active.groupby('CLV2')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
+pivot_clv2_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby('CLV2').size().rename('Số lượng line')
 pivot_clv2 = pivot_clv2_sum.join(pivot_clv2_count).fillna(0).reset_index()
 pivot_clv2['Số lượng line'] = pivot_clv2['Số lượng line'].astype(int)
 pivot_clv2 = pivot_clv2[['CLV2', 'Số lượng line', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']]
@@ -103,14 +114,14 @@ tong_row_clv2['CLV2'] = 'Tổng'
 pivot_clv2 = pd.concat([pivot_clv2, tong_row_clv2], ignore_index=True)
 
 # 3. Top 5 CLV4 (Chênh lệch lớn nhất - tính theo trị tuyệt đối)
-clv4_sum = df_may.groupby('CLV4')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum().reset_index()
+clv4_sum = df_active.groupby('CLV4')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum().reset_index()
 clv4_sum['Abs_ChenhLech'] = clv4_sum['Chênh lệch'].abs()
 pivot_clv4 = clv4_sum.sort_values(by='Abs_ChenhLech', ascending=False).drop(columns=['Abs_ChenhLech']).head(5)
 
 # 4A. Bảng SỐ LƯỢNG Chi tiết Từng Ngày - Siêu Thị
-pivot_qty_sum = df_may.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
-pivot_qty_count = df_may[df_may['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line chênh lệch')
-pivot_qty_nhap0 = df_may[(df_may['Số lượng nhận'] == 0) & (df_may['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line nhập=0')
+pivot_qty_sum = df_active.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
+pivot_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line chênh lệch')
+pivot_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line nhập=0')
 
 pivot_qty = pivot_qty_sum.join(pivot_qty_count).join(pivot_qty_nhap0).fillna(0).reset_index()
 pivot_qty['SL line chênh lệch'] = pivot_qty['SL line chênh lệch'].astype(int)
@@ -130,7 +141,7 @@ pivot_qty = pivot_qty.sort_values(by='Abs_ChenhLech', ascending=False).drop(colu
 pivot_qty = pivot_qty[['Ngày_str', 'ID ST', 'Chi nhánh nhận', 'SL line nhập=0 / chênh lệch', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tỷ lệ (%)', 'SL đã tạo bs cho ST', 'SL đã xác nhận được trả kho rau', 'Số lượng hao hụt', 'Số lượng chưa xác định', '% CXD']]
 
 # 4B. Bảng GIÁ TRỊ Chi tiết Từng Ngày - Siêu Thị
-pivot_val_sum = df_may.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
+pivot_val_sum = df_active.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
 pivot_val_sum.rename(columns={'Tổng GT': 'Giá trị chênh lệch (VNĐ)'}, inplace=True)
 
 
@@ -199,18 +210,33 @@ with tab2:
     st.dataframe(filtered_val.style.format(format_vn), use_container_width=True, height=600)
 
 st.write("---")
-st.subheader("🚨 5. BÁO CÁO LỖI: ST NHẬP THIẾU (Tuần 19 & 20)")
+st.subheader("🚨 5. BÁO CÁO LỖI: ST NHẬP THIẾU")
 
-week_filter = st.selectbox("📅 Chọn Tuần:", ["Cả 2 Tuần (04.05 - 17.05)", "Tuần 19 (04.05 - 10.05)", "Tuần 20 (11.05 - 17.05)"])
+week_options = [
+    "Tất cả các tuần",
+    "Tuần 14 (30.03 - 05.04)",
+    "Tuần 15 (06.04 - 12.04)",
+    "Tuần 16 (13.04 - 19.04)",
+    "Tuần 17 (20.04 - 26.04)",
+    "Tuần 18 (27.04 - 03.05)",
+    "Tuần 19 (04.05 - 10.05)",
+    "Tuần 20 (11.05 - 17.05)",
+    "Tuần 21 (18.05 - 24.05)",
+    "Tuần 22 (25.05 - 31.05)"
+]
 
-start_date = pd.to_datetime('2026-05-04')
-end_date = pd.to_datetime('2026-05-17')
-if week_filter == "Tuần 19 (04.05 - 10.05)":
-    end_date = pd.to_datetime('2026-05-10')
-elif week_filter == "Tuần 20 (11.05 - 17.05)":
-    start_date = pd.to_datetime('2026-05-11')
+week_filter = st.selectbox("📅 Chọn Tuần:", week_options)
 
-df_tuan = df_may[(df_may['Ngày'] >= start_date) & (df_may['Ngày'] <= end_date)].copy()
+start_date = pd.to_datetime('2026-03-30')
+end_date = pd.to_datetime('2026-05-31')
+
+if week_filter != "Tất cả các tuần":
+    date_str = week_filter.split('(')[1].split(')')[0]
+    start_str, end_str = date_str.split(' - ')
+    start_date = pd.to_datetime(start_str + '.2026', format='%d.%m.%Y')
+    end_date = pd.to_datetime(end_str + '.2026', format='%d.%m.%Y')
+
+df_tuan = df_active[(df_active['Ngày'] >= start_date) & (df_active['Ngày'] <= end_date)].copy()
 df_loi = df_tuan[df_tuan['Lỗi'].fillna('').str.contains('ST nhập thiếu', case=False)].copy()
 
 if not df_loi.empty:
