@@ -137,6 +137,12 @@ pivot_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngà
 pivot_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line nhập=0')
 
 pivot_qty = pivot_qty_sum.join(pivot_qty_count).join(pivot_qty_nhap0).fillna(0).reset_index()
+
+if 'SL line chênh lệch' not in pivot_qty.columns:
+    pivot_qty['SL line chênh lệch'] = 0
+if 'SL line nhập=0' not in pivot_qty.columns:
+    pivot_qty['SL line nhập=0'] = 0
+
 pivot_qty['SL line chênh lệch'] = pivot_qty['SL line chênh lệch'].astype(int)
 pivot_qty['SL line nhập=0'] = pivot_qty['SL line nhập=0'].astype(int)
 pivot_qty.insert(3, 'SL SKU NHẬP = 0/SL SKU CHÊNH LỆCH', pivot_qty['SL line nhập=0'].astype(str) + " / " + pivot_qty['SL line chênh lệch'].astype(str))
@@ -287,9 +293,15 @@ st.subheader("🛒 5. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO MÃ HÀNG")
 
 item_qty_sum = df_active.groupby(['Ngày_str', 'CLV4'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
 item_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'CLV4']).size().rename('SL ST chênh lệch')
-item_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'CLV4']).size().rename('SL ST nhận=0')
+item_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'CLV4']).size().rename('SL ST nhập=0')
 
 pivot_qty_item = item_qty_sum.join(item_qty_count).join(item_qty_nhap0).fillna(0).reset_index()
+
+if 'SL ST chênh lệch' not in pivot_qty_item.columns:
+    pivot_qty_item['SL ST chênh lệch'] = 0
+if 'SL ST nhập=0' not in pivot_qty_item.columns:
+    pivot_qty_item['SL ST nhập=0'] = 0
+
 pivot_qty_item['SL ST chênh lệch'] = pivot_qty_item['SL ST chênh lệch'].astype(int)
 pivot_qty_item['SL ST nhập=0'] = pivot_qty_item['SL ST nhập=0'].astype(int)
 pivot_qty_item.insert(2, 'SL ST NHẬP = 0/SL ST CHÊNH LỆCH', pivot_qty_item['SL ST nhập=0'].astype(str) + " / " + pivot_qty_item['SL ST chênh lệch'].astype(str))
