@@ -500,14 +500,14 @@ if not df_loi.empty:
     if 'RSM phụ trách' not in df_loi.columns:
         df_loi['RSM phụ trách'] = 'N/A'
         
-    t1_loi = df_loi.groupby(['ID ST', 'Chi nhánh nhận', 'GSM phụ trách', 'RSM phụ trách']).agg(
+    t1_loi = df_loi.groupby(['ID ST', 'Chi nhánh nhận', 'GSM phụ trách', 'RSM phụ trách'], dropna=False).agg(
         So_ngay_tao_bo_sung=('Ngày', 'nunique'),
         Tong_SL_da_tao=('Qty_O', 'sum'),
         Tong_gia_tri=('Tổng ST', 'sum')
     ).reset_index()
     t1_loi.columns = ['ID ST', 'Name Mart', 'GSM phụ trách', 'RSM phụ trách', 'Số ngày tạo bổ sung', 'Tổng SL đã tạo', 'Tổng giá trị']
     
-    t2_loi = df_loi.groupby('RSM phụ trách').agg(
+    t2_loi = df_loi.groupby('RSM phụ trách', dropna=False).agg(
         SL_ST_phat_sinh=('ID ST', 'nunique'),
         SL_tao_bo_sung=('Qty_O', 'sum'),
         Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
@@ -524,7 +524,7 @@ if not df_loi.empty:
     t2_loi = t2_loi[['RSM phụ trách', 'SL GSM quản lý', 'SL_ST_phat_sinh', 'SL_tao_bo_sung', 'Gia_tri_tao_bo_sung']]
     t2_loi.columns = ['RSM phụ trách', 'SL GSM quản lý', 'SL ST phát sinh', 'SL tạo bổ sung', 'Giá trị tạo bổ sung']
     
-    t3_loi = df_loi.groupby('GSM phụ trách').agg(
+    t3_loi = df_loi.groupby('GSM phụ trách', dropna=False).agg(
         SL_ST_phat_sinh=('ID ST', 'nunique'),
         SL_tao_bo_sung=('Qty_O', 'sum'),
         Gia_tri_tao_bo_sung=('Tổng ST', 'sum')
