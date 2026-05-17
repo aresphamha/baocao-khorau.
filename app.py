@@ -8,7 +8,7 @@ def get_excel_bytes(df):
     df_to_export = df.copy()
     if isinstance(df_to_export.columns, pd.MultiIndex):
         df_to_export.columns = [' - '.join(str(c) for c in col if c).strip() for col in df_to_export.columns.values]
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_to_export.to_excel(writer, index=False)
     return output.getvalue()
 
