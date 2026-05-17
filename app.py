@@ -138,8 +138,8 @@ tong_row_ngay.rename(columns={
 }, inplace=True)
 
 # 2. Theo CLV2
-pivot_clv2_sum = df_active.groupby('CLV2')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
-pivot_clv2_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby('CLV2').size().rename('Số lượng line')
+pivot_clv2_sum = df_active.groupby('CLV2', dropna=False)[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
+pivot_clv2_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby('CLV2', dropna=False).size().rename('Số lượng line')
 pivot_clv2 = pivot_clv2_sum.join(pivot_clv2_count).fillna(0).reset_index()
 pivot_clv2['Số lượng line'] = pivot_clv2['Số lượng line'].astype(int)
 pivot_clv2 = pivot_clv2[['CLV2', 'Số lượng line', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']]
@@ -148,14 +148,14 @@ tong_row_clv2 = pivot_clv2.sum(numeric_only=True).to_frame().T
 tong_row_clv2['CLV2'] = 'Tổng'
 
 # 3. Top 5 CLV4 (Chênh lệch lớn nhất - tính theo trị tuyệt đối)
-clv4_sum = df_active.groupby('CLV4')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum().reset_index()
+clv4_sum = df_active.groupby('CLV4', dropna=False)[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum().reset_index()
 clv4_sum['Abs_ChenhLech'] = clv4_sum['Chênh lệch'].abs()
 pivot_clv4 = clv4_sum.sort_values(by='Abs_ChenhLech', ascending=False).drop(columns=['Abs_ChenhLech']).head(5)
 
 # 4A. Bảng SỐ LƯỢNG Chi tiết Từng Ngày - Siêu Thị
-pivot_qty_sum = df_active.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
-pivot_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line chênh lệch')
-pivot_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận']).size().rename('SL line nhập=0')
+pivot_qty_sum = df_active.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'], dropna=False)[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
+pivot_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'], dropna=False).size().rename('SL line chênh lệch')
+pivot_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'], dropna=False).size().rename('SL line nhập=0')
 
 pivot_qty = pivot_qty_sum.join(pivot_qty_count).join(pivot_qty_nhap0).fillna(0).reset_index()
 
@@ -180,7 +180,7 @@ pivot_qty = pivot_qty.sort_values(by='Abs_ChenhLech', ascending=False).drop(colu
 pivot_qty = pivot_qty[['Ngày_str', 'ID ST', 'Chi nhánh nhận', 'SL SKU NHẬP = 0/SL SKU CHÊNH LỆCH', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tỷ lệ (%)', 'SL đã tạo bs cho ST', 'SL đã xác nhận được trả kho rau', 'Số lượng hao hụt', 'Số lượng chưa xác định']]
 
 # 4B. Bảng GIÁ TRỊ Chi tiết Từng Ngày - Siêu Thị
-pivot_val_sum = df_active.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'])[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
+pivot_val_sum = df_active.groupby(['Ngày_str', 'ID ST', 'Chi nhánh nhận'], dropna=False)[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
 pivot_val_sum.rename(columns={'Tổng GT': 'Giá trị chênh lệch (VNĐ)'}, inplace=True)
 
 
@@ -193,11 +193,11 @@ if st.button('🔄 Cập nhật dữ liệu mới nhất'):
 st.write("---")
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Tổng số lượng chuyển", f"{tong_row_clv2.iloc[0]['Số lượng chuyển']:,.1f}")
+    st.metric("Tổng số lượng chuyển", f"{df_active['Số lượng chuyển'].sum():,.2f}".rstrip('0').rstrip('.'))
 with col2:
-    st.metric("Tổng số lượng nhận", f"{tong_row_clv2.iloc[0]['Số lượng nhận']:,.1f}")
+    st.metric("Tổng số lượng nhận", f"{df_active['Số lượng nhận'].sum():,.2f}".rstrip('0').rstrip('.'))
 with col3:
-    st.metric("TỔNG CHÊNH LỆCH", f"{tong_row_clv2.iloc[0]['Chênh lệch']:,.1f}")
+    st.metric("TỔNG CHÊNH LỆCH", f"{df_active['Chênh lệch'].sum():,.2f}".rstrip('0').rstrip('.'))
 
 # Hàm format màu đỏ cho số chênh lệch
 def color_red_for_chenhlech(val):
@@ -278,9 +278,9 @@ dates = ["Tất cả các ngày"] + sorted_dates
 st.write("---")
 st.subheader("🛒 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO NHÓM HÀNG (CLV4)")
 
-item_qty_sum = df_active.groupby(['Ngày_str', 'CLV4'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
-item_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'CLV4']).size().rename('SL ST chênh lệch')
-item_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'CLV4']).size().rename('SL ST nhập=0')
+item_qty_sum = df_active.groupby(['Ngày_str', 'CLV4'], dropna=False)[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
+item_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'CLV4'], dropna=False).size().rename('SL ST chênh lệch')
+item_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'CLV4'], dropna=False).size().rename('SL ST nhập=0')
 
 pivot_qty_item = item_qty_sum.join(item_qty_count).join(item_qty_nhap0).fillna(0).reset_index()
 
@@ -305,7 +305,7 @@ pivot_qty_item['Abs_ChenhLech'] = pivot_qty_item['Chênh lệch'].abs()
 pivot_qty_item = pivot_qty_item.sort_values(by='Abs_ChenhLech', ascending=False).drop(columns=['Abs_ChenhLech'])
 pivot_qty_item = pivot_qty_item[['Ngày_str', 'Mã hàng (CLV4)', 'SL ST NHẬP = 0/SL ST CHÊNH LỆCH', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tỷ lệ (%)', 'SL đã tạo bs cho ST', 'SL đã xác nhận được trả kho rau', 'Số lượng hao hụt', 'Số lượng chưa xác định']]
 
-pivot_val_item = df_active.groupby(['Ngày_str', 'CLV4'])[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
+pivot_val_item = df_active.groupby(['Ngày_str', 'CLV4'], dropna=False)[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
 pivot_val_item.rename(columns={'Tổng GT': 'Giá trị chênh lệch (VNĐ)', 'CLV4': 'Mã hàng (CLV4)'}, inplace=True)
 
 selected_date_item = st.selectbox("🔍 Lọc theo Ngày (Mã hàng):", dates)
@@ -348,9 +348,9 @@ with tab4:
 st.write("---")
 st.subheader("🏷️ 5. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO MÃ HÀNG (SKU)")
 
-sku_qty_sum = df_active.groupby(['Ngày_str', 'SKU_Full'])[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
-sku_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'SKU_Full']).size().rename('SL ST chênh lệch')
-sku_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'SKU_Full']).size().rename('SL ST nhập=0')
+sku_qty_sum = df_active.groupby(['Ngày_str', 'SKU_Full'], dropna=False)[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
+sku_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'SKU_Full'], dropna=False).size().rename('SL ST chênh lệch')
+sku_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'SKU_Full'], dropna=False).size().rename('SL ST nhập=0')
 
 pivot_qty_sku = sku_qty_sum.join(sku_qty_count).join(sku_qty_nhap0).fillna(0).reset_index()
 
@@ -375,7 +375,7 @@ pivot_qty_sku['Abs_ChenhLech'] = pivot_qty_sku['Chênh lệch'].abs()
 pivot_qty_sku = pivot_qty_sku.sort_values(by='Abs_ChenhLech', ascending=False).drop(columns=['Abs_ChenhLech'])
 pivot_qty_sku = pivot_qty_sku[['Ngày_str', 'Mã hàng (SKU)', 'SL ST NHẬP = 0/SL ST CHÊNH LỆCH', 'Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tỷ lệ (%)', 'SL đã tạo bs cho ST', 'SL đã xác nhận được trả kho rau', 'Số lượng hao hụt', 'Số lượng chưa xác định']]
 
-pivot_val_sku = df_active.groupby(['Ngày_str', 'SKU_Full'])[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
+pivot_val_sku = df_active.groupby(['Ngày_str', 'SKU_Full'], dropna=False)[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
 pivot_val_sku.rename(columns={'Tổng GT': 'Giá trị chênh lệch (VNĐ)', 'SKU_Full': 'Mã hàng (SKU)'}, inplace=True)
 
 selected_date_sku = st.selectbox("🔍 Lọc theo Ngày (SKU):", dates)
