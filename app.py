@@ -1,6 +1,29 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import io
+
+def get_excel_bytes(df):
+    output = io.BytesIO()
+    df_to_export = df.copy()
+    if isinstance(df_to_export.columns, pd.MultiIndex):
+        df_to_export.columns = [' - '.join(str(c) for c in col if c).strip() for col in df_to_export.columns.values]
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_to_export.to_excel(writer, index=False)
+    return output.getvalue()
+
+def display_df_with_download(styled_df, filename, height=None):
+    if height:
+        st.dataframe(styled_df, use_container_width=True, height=height)
+    else:
+        st.dataframe(styled_df, use_container_width=True)
+    df_raw = styled_df.data if hasattr(styled_df, 'data') else styled_df
+    try:
+        excel_data = get_excel_bytes(df_raw)
+        st.download_button(label="📥 Tải xuống Excel", data=excel_data, file_name=f"{filename}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=filename)
+    except Exception as e:
+        st.error(f"Lỗi xuất Excel: {e}")
+
 
 # Cấu hình trang web
 st.set_page_config(page_title="Dashboard Đối Soát Kho Rau", page_icon="🚀", layout="wide")
@@ -227,7 +250,7 @@ if not pivot_ngay.empty:
     top_day = pivot_ngay.sort_values(by='Chênh lệch', ascending=False).iloc[0]
     st.info(f"🔹 **Ngày biến động nhất**: **{top_day['Ngày_str']}** ghi nhận mức chênh lệch cao nhất ({top_day['Chênh lệch']:,.2f} item / {top_day['Giá trị chênh lệch (VNĐ)']:,.0f} VNĐ).")
 
-st.dataframe(pivot_ngay_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_ngay_renamed.columns if 'Chênh lệch' in c[1] and 'Giá trị' not in c[1] and 'SKU' not in c[1]]), use_container_width=True)
+display_df_with_download(pivot_ngay_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_ngay_renamed.columns if 'Chênh lệch' in c[1] and 'Giá trị' not in c[1] and 'SKU' not in c[1]]), "Tong_Hop_Theo_Ngay")
 
 st.write("---")
 col4, col5 = st.columns(2)
@@ -237,14 +260,14 @@ with col4:
     if not pivot_clv4.empty:
         top_clv4 = pivot_clv4.iloc[0]
         st.info(f"🔹 **Mã hàng (CLV4) cảnh báo đỏ**: **{top_clv4['CLV4']}** đang dẫn đầu với mức chênh lệch {top_clv4['Chênh lệch']:,.2f}.")
-    st.dataframe(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), use_container_width=True)
+    display_df_with_download(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), "Top_5_CLV4")
 with col5:
     st.subheader("📦 3. TỔNG HỢP THEO NGÀNH HÀNG (CLV2)")
     st.write("### 📌 Đánh giá nhanh tình hình")
     if not pivot_clv2.empty:
         top_clv2 = pivot_clv2.iloc[0]
         st.info(f"🔹 **Ngành hàng (CLV2) trọng điểm**: **{top_clv2['CLV2']}** chiếm số lượng chênh lệch cao nhất ({top_clv2['Chênh lệch']:,.2f}).")
-    st.dataframe(pivot_clv2_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_clv2_renamed.columns if 'Chênh lệch' in c[1] and 'SL' not in c[1]]), use_container_width=True)
+    display_df_with_download(pivot_clv2_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_clv2_renamed.columns if 'Chênh lệch' in c[1] and 'SL' not in c[1]]), "Tong_Hop_CLV2")
 
 st.write("---")
 
@@ -316,10 +339,10 @@ filtered_val_item_renamed = create_multiindex_headers(filtered_val_item, tong_va
 tab3, tab4 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG (Mã Hàng)", "💰 Chi Tiết GIÁ TRỊ (Mã Hàng)"])
 
 with tab3:
-    st.dataframe(filtered_qty_item_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_item_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), use_container_width=True, height=600)
+    display_df_with_download(filtered_qty_item_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_item_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), "Chi_Tiet_SL_CLV4", height=600)
     
 with tab4:
-    st.dataframe(filtered_val_item_renamed.style.format(format_vn), use_container_width=True, height=600)
+    display_df_with_download(filtered_val_item_renamed.style.format(format_vn), "Chi_Tiet_GT_CLV4", height=600)
 
 # --- 6. CHI TIẾT MÃ HÀNG (SKU) ---
 st.write("---")
@@ -386,10 +409,10 @@ filtered_val_sku_renamed = create_multiindex_headers(filtered_val_sku, tong_val_
 tab5, tab6 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG (SKU)", "💰 Chi Tiết GIÁ TRỊ (SKU)"])
 
 with tab5:
-    st.dataframe(filtered_qty_sku_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_sku_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), use_container_width=True, height=600)
+    display_df_with_download(filtered_qty_sku_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_sku_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), "Chi_Tiet_SL_SKU", height=600)
     
 with tab6:
-    st.dataframe(filtered_val_sku_renamed.style.format(format_vn), use_container_width=True, height=600)
+    display_df_with_download(filtered_val_sku_renamed.style.format(format_vn), "Chi_Tiet_GT_SKU", height=600)
 
 st.write("---")
 st.subheader("🏬 6. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
@@ -425,10 +448,10 @@ filtered_val_renamed = create_multiindex_headers(filtered_val, tong_val)
 tab1, tab2 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG", "💰 Chi Tiết GIÁ TRỊ (VNĐ)"])
 
 with tab1:
-    st.dataframe(filtered_qty_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), use_container_width=True, height=600)
+    display_df_with_download(filtered_qty_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), "Chi_Tiet_SL_Sieu_Thi", height=600)
 
 with tab2:
-    st.dataframe(filtered_val_renamed.style.format(format_vn), use_container_width=True, height=600)
+    display_df_with_download(filtered_val_renamed.style.format(format_vn), "Chi_Tiet_GT_Sieu_Thi", height=600)
 
 # --- 5. CHI TIẾT NHÓM HÀNG (CLV4) ---
 st.subheader("🚨 7. BÁO CÁO LỖI: ST NHẬP THIẾU")
@@ -523,15 +546,15 @@ if not df_loi.empty:
     t3_renamed = create_multiindex_headers(t3_loi, t3_tong)
 
     st.write(f"**Bảng tổng hợp theo Siêu thị ({week_filter})**")
-    st.dataframe(t1_renamed.style.format(format_vn), use_container_width=True)
+    display_df_with_download(t1_renamed.style.format(format_vn), "Bang_Loi_Sieu_Thi")
     
     col6, col7 = st.columns(2)
     with col6:
         st.write(f"**Bảng tổng hợp theo RSM ({week_filter})**")
-        st.dataframe(t2_renamed.style.format(format_vn), use_container_width=True)
+        display_df_with_download(t2_renamed.style.format(format_vn), "Bang_Loi_RSM")
     with col7:
         st.write(f"**Bảng tổng hợp theo GSM ({week_filter})**")
-        st.dataframe(t3_renamed.style.format(format_vn), use_container_width=True)
+        display_df_with_download(t3_renamed.style.format(format_vn), "Bang_Loi_GSM")
 
     # Đánh giá chi tiết (Analytical Insights)
     st.write("### 📌 Đánh giá nhanh tình hình")
@@ -600,7 +623,7 @@ if not df_loi.empty:
             tabs = st.tabs(list(comp_dict.keys()))
             for tab, (title, df_comp) in zip(tabs, comp_dict.items()):
                 with tab:
-                    st.dataframe(df_comp.style.format(format_vn), use_container_width=True)
+                    display_df_with_download(df_comp.style.format(format_vn), f"So_Sanh_{index_name}_{title}")
 
         render_comparison(df_loi_week, ['RSM phụ trách'], 'RSM phụ trách', f"7.1 So sánh từng tuần theo RSM ({week_filter})")
         render_comparison(df_loi_week, ['GSM phụ trách'], 'GSM phụ trách', f"7.2 So sánh từng tuần theo GSM ({week_filter})")
