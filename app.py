@@ -56,10 +56,7 @@ def clean_number(x):
             if num_commas > 1:
                 x = x.replace(',', '')
             else:
-                if len(parts[1]) == 3 and parts[0] not in ['0', '-0']:
-                    x = x.replace(',', '') # VD: 1,000 -> 1000
-                else:
-                    x = x.replace(',', '.') # VD: 5,00 -> 5.00
+                x = x.replace(',', '.') # VN format: comma is decimal
         elif num_dots > 0:
             parts = x.split('.')
             if num_dots > 1:
@@ -256,11 +253,14 @@ def format_vn(val):
     if pd.isna(val):
         return ""
     if isinstance(val, (int, float, np.integer, np.floating)):
-        # Format chuẩn tiếng anh 1,234.56 -> đổi chéo phẩy và chấm
-        formatted = f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-        if formatted.endswith(',00'):
-            return formatted[:-3]
-        return formatted
+        # Nếu là số nguyên thì không hiện phần thập phân
+        if val == int(val):
+            return f"{int(val):,}".replace(',', '.')
+        else:
+            formatted = f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            if formatted.endswith(',00'):
+                return formatted[:-3]
+            return formatted
     return val
 
 # Thẻ thông tin (Metrics)
@@ -548,10 +548,10 @@ start_date = pd.to_datetime('2026-03-30')
 end_date = pd.to_datetime('2026-05-31')
 
 if week_filter == "Nguyên Tháng 4":
-    start_date = pd.to_datetime('2026-03-30')
-    end_date = pd.to_datetime('2026-05-03')
+    start_date = pd.to_datetime('2026-04-01')
+    end_date = pd.to_datetime('2026-04-30')
 elif week_filter == "Nguyên Tháng 5":
-    start_date = pd.to_datetime('2026-05-04')
+    start_date = pd.to_datetime('2026-05-01')
     end_date = pd.to_datetime('2026-05-31')
 elif week_filter != "Tất cả các tuần":
     date_str = week_filter.split('(')[1].split(')')[0]
