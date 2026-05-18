@@ -31,12 +31,45 @@ st.set_page_config(page_title="Dashboard Đối Soát Kho Rau", page_icon="🚀"
 st.title("🚀 Báo Cáo Đối Soát Kho Rau")
 st.markdown("Dữ liệu tự động cập nhật từ Hệ thống Google Sheets")
 
-# Hàm làm sạch số liệu
+# Hàm làm sạch số liệu thông minh (Xử lý lẫn lộn định dạng Anh/Việt)
 def clean_number(x):
-    if pd.isna(x):
+    import pandas as pd
+    if pd.isna(x) or x == '':
         return 0.0
+    if isinstance(x, (int, float)):
+        return float(x)
     if isinstance(x, str):
-        x = x.replace('.', '').replace(',', '.')
+        x = x.strip()
+        if x == '':
+            return 0.0
+        num_dots = x.count('.')
+        num_commas = x.count(',')
+        
+        if num_dots > 0 and num_commas > 0:
+            last_dot = x.rfind('.')
+            last_comma = x.rfind(',')
+            if last_comma > last_dot: # Format VN: 1.234,50
+                x = x.replace('.', '').replace(',', '.')
+            else: # Format EN: 1,234.50
+                x = x.replace(',', '')
+        elif num_commas > 0:
+            parts = x.split(',')
+            if num_commas > 1:
+                x = x.replace(',', '')
+            else:
+                if len(parts[1]) == 3 and parts[0] not in ['0', '-0']:
+                    x = x.replace(',', '') # VD: 1,000 -> 1000
+                else:
+                    x = x.replace(',', '.') # VD: 5,00 -> 5.00
+        elif num_dots > 0:
+            parts = x.split('.')
+            if num_dots > 1:
+                x = x.replace('.', '')
+            else:
+                if len(parts[1]) == 3 and parts[0] not in ['0', '-0']:
+                    x = x.replace('.', '') # VD: 16.000 -> 16000
+                else:
+                    pass # VD: 5.5 -> 5.5
     try:
         return float(x)
     except:
@@ -137,6 +170,31 @@ tong_row_ngay.rename(columns={
     'CXD': 'Số lượng chưa xác định'
 }, inplace=True)
 
+# 1B. Theo ngày (Giá trị)
+pivot_ngay_val = df_active.groupby('Ngày_str')[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
+pivot_ngay_val['Ngày_dt'] = pd.to_datetime(pivot_ngay_val['Ngày_str'], format='%d/%m/%Y', errors='coerce')
+pivot_ngay_val = pivot_ngay_val.sort_values(by='Ngày_dt').drop(columns=['Ngày_dt'])
+
+tong_row_ngay_val = pivot_ngay_val.sum(numeric_only=True).to_frame().T
+if not tong_row_ngay_val.empty: tong_row_ngay_val['Ngày_str'] = 'Tổng'
+
+pivot_ngay_val.rename(columns={
+    'Tổng GT': 'Giá trị chênh lệch (VNĐ)',
+    'Tổng ST': 'Giá trị đã tạo bs cho ST (VNĐ)',
+    'Tổng kho rau': 'Giá trị đã xác nhận được trả kho rau (VNĐ)',
+    'Tổng hao hụt': 'Giá trị hao hụt (VNĐ)',
+    'Tổng chưa xác định': 'Giá trị chưa xác định (VNĐ)'
+}, inplace=True)
+
+if not tong_row_ngay_val.empty:
+    tong_row_ngay_val.rename(columns={
+        'Tổng GT': 'Giá trị chênh lệch (VNĐ)',
+        'Tổng ST': 'Giá trị đã tạo bs cho ST (VNĐ)',
+        'Tổng kho rau': 'Giá trị đã xác nhận được trả kho rau (VNĐ)',
+        'Tổng hao hụt': 'Giá trị hao hụt (VNĐ)',
+        'Tổng chưa xác định': 'Giá trị chưa xác định (VNĐ)'
+    }, inplace=True)
+
 # 2. Theo CLV2
 pivot_clv2_sum = df_active.groupby('CLV2', dropna=False)[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch']].sum()
 pivot_clv2_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby('CLV2', dropna=False).size().rename('Số lượng line')
@@ -193,11 +251,11 @@ if st.button('🔄 Cập nhật dữ liệu mới nhất'):
 st.write("---")
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Tổng số lượng chuyển", f"{df_active['Số lượng chuyển'].sum():,.2f}".rstrip('0').rstrip('.'))
+    st.metric("Tổng số lượng chuyển", format_vn(df_active['Số lượng chuyển'].sum()))
 with col2:
-    st.metric("Tổng số lượng nhận", f"{df_active['Số lượng nhận'].sum():,.2f}".rstrip('0').rstrip('.'))
+    st.metric("Tổng số lượng nhận", format_vn(df_active['Số lượng nhận'].sum()))
 with col3:
-    st.metric("TỔNG CHÊNH LỆCH", f"{df_active['Chênh lệch'].sum():,.2f}".rstrip('0').rstrip('.'))
+    st.metric("TỔNG CHÊNH LỆCH", format_vn(df_active['Chênh lệch'].sum()))
 
 # Hàm format màu đỏ cho số chênh lệch
 def color_red_for_chenhlech(val):
@@ -206,9 +264,14 @@ def color_red_for_chenhlech(val):
 
 # Hàm format số theo chuẩn Việt Nam (1.000.000,00)
 def format_vn(val):
-    if isinstance(val, (int, float)):
+    if pd.isna(val):
+        return ""
+    if isinstance(val, (int, float, np.integer, np.floating)):
         # Format chuẩn tiếng anh 1,234.56 -> đổi chéo phẩy và chấm
-        return f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        formatted = f"{format_vn(float(val))}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        if formatted.endswith(',00'):
+            return formatted[:-3]
+        return formatted
     return val
 
 def create_multiindex_headers(df, tong_df):
@@ -239,6 +302,7 @@ def create_multiindex_headers(df, tong_df):
     return df_new
 
 pivot_ngay_renamed = create_multiindex_headers(pivot_ngay, tong_row_ngay)
+pivot_ngay_val_renamed = create_multiindex_headers(pivot_ngay_val, tong_row_ngay_val)
 pivot_clv2_renamed = create_multiindex_headers(pivot_clv2, tong_row_clv2)
 
 
@@ -248,9 +312,15 @@ st.subheader("📅 1. TỔNG HỢP THEO TỪNG NGÀY")
 st.write("### 📌 Đánh giá nhanh tình hình")
 if not pivot_ngay.empty:
     top_day = pivot_ngay.sort_values(by='Chênh lệch', ascending=False).iloc[0]
-    st.info(f"🔹 **Ngày biến động nhất**: **{top_day['Ngày_str']}** ghi nhận mức chênh lệch cao nhất ({top_day['Chênh lệch']:,.2f} item / {top_day['Giá trị chênh lệch (VNĐ)']:,.0f} VNĐ).")
+    st.info(f"🔹 **Ngày biến động nhất**: **{top_day['Ngày_str']}** ghi nhận mức chênh lệch cao nhất ({format_vn(top_day['Chênh lệch'])} item / {format_vn(top_day['Giá trị chênh lệch (VNĐ)'])} VNĐ).")
 
-display_df_with_download(pivot_ngay_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_ngay_renamed.columns if 'Chênh lệch' in c[1] and 'Giá trị' not in c[1] and 'SKU' not in c[1]]), "Tong_Hop_Theo_Ngay")
+tab_ngay_qty, tab_ngay_val = st.tabs(["📊 Số lượng (Từng Ngày)", "💰 Giá trị (Từng Ngày)"])
+
+with tab_ngay_qty:
+    display_df_with_download(pivot_ngay_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_ngay_renamed.columns if 'Chênh lệch' in c[1] and 'Giá trị' not in c[1] and 'SKU' not in c[1]]), "Tong_Hop_Theo_Ngay_So_Luong")
+
+with tab_ngay_val:
+    display_df_with_download(pivot_ngay_val_renamed.style.format(format_vn), "Tong_Hop_Theo_Ngay_Gia_Tri")
 
 st.write("---")
 col4, col5 = st.columns(2)
@@ -259,14 +329,14 @@ with col4:
     st.write("### 📌 Đánh giá nhanh tình hình")
     if not pivot_clv4.empty:
         top_clv4 = pivot_clv4.iloc[0]
-        st.info(f"🔹 **Mã hàng (CLV4) cảnh báo đỏ**: **{top_clv4['CLV4']}** đang dẫn đầu với mức chênh lệch {top_clv4['Chênh lệch']:,.2f}.")
+        st.info(f"🔹 **Mã hàng (CLV4) cảnh báo đỏ**: **{top_clv4['CLV4']}** đang dẫn đầu với mức chênh lệch {format_vn(top_clv4['Chênh lệch'])}.")
     display_df_with_download(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), "Top_5_CLV4")
 with col5:
     st.subheader("📦 3. TỔNG HỢP THEO NGÀNH HÀNG (CLV2)")
     st.write("### 📌 Đánh giá nhanh tình hình")
     if not pivot_clv2.empty:
         top_clv2 = pivot_clv2.iloc[0]
-        st.info(f"🔹 **Ngành hàng (CLV2) trọng điểm**: **{top_clv2['CLV2']}** chiếm số lượng chênh lệch cao nhất ({top_clv2['Chênh lệch']:,.2f}).")
+        st.info(f"🔹 **Ngành hàng (CLV2) trọng điểm**: **{top_clv2['CLV2']}** chiếm số lượng chênh lệch cao nhất ({format_vn(top_clv2['Chênh lệch'])}).")
     display_df_with_download(pivot_clv2_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_clv2_renamed.columns if 'Chênh lệch' in c[1] and 'SL' not in c[1]]), "Tong_Hop_CLV2")
 
 st.write("---")
@@ -317,8 +387,8 @@ if not pivot_qty_item.empty and not pivot_val_item.empty:
     
     if top_item_qty is not None and top_item_val is not None:
         st.info(
-            f"🔹 **Mã hàng chênh lệch số lượng lớn nhất**: **{top_item_qty['Mã hàng (CLV4)']}** (Chênh lệch {top_item_qty['Chênh lệch']:,.2f} item).\n\n"
-            f"🔹 **Mã hàng chênh lệch giá trị lớn nhất**: **{top_item_val['Mã hàng (CLV4)']}** (Giá trị chênh lệch {top_item_val['Giá trị chênh lệch (VNĐ)']:,.0f} VNĐ)."
+            f"🔹 **Mã hàng chênh lệch số lượng lớn nhất**: **{top_item_qty['Mã hàng (CLV4)']}** (Chênh lệch {format_vn(top_item_qty['Chênh lệch'])} item).\n\n"
+            f"🔹 **Mã hàng chênh lệch giá trị lớn nhất**: **{top_item_val['Mã hàng (CLV4)']}** (Giá trị chênh lệch {format_vn(top_item_val['Giá trị chênh lệch (VNĐ)'])} VNĐ)."
         )
 
 if selected_date_item != "Tất cả các ngày":
@@ -387,8 +457,8 @@ if not pivot_qty_sku.empty and not pivot_val_sku.empty:
     
     if top_sku_qty is not None and top_sku_val is not None:
         st.info(
-            f"🔹 **Mã hàng chênh lệch số lượng lớn nhất**: **{top_sku_qty['Mã hàng (SKU)']}** (Chênh lệch {top_sku_qty['Chênh lệch']:,.2f} item).\n\n"
-            f"🔹 **Mã hàng chênh lệch giá trị lớn nhất**: **{top_sku_val['Mã hàng (SKU)']}** (Giá trị chênh lệch {top_sku_val['Giá trị chênh lệch (VNĐ)']:,.0f} VNĐ)."
+            f"🔹 **Mã hàng chênh lệch số lượng lớn nhất**: **{top_sku_qty['Mã hàng (SKU)']}** (Chênh lệch {format_vn(top_sku_qty['Chênh lệch'])} item).\n\n"
+            f"🔹 **Mã hàng chênh lệch giá trị lớn nhất**: **{top_sku_val['Mã hàng (SKU)']}** (Giá trị chênh lệch {format_vn(top_sku_val['Giá trị chênh lệch (VNĐ)'])} VNĐ)."
         )
 
 if selected_date_sku != "Tất cả các ngày":
@@ -426,8 +496,8 @@ if not pivot_qty.empty and not pivot_val_sum.empty:
     
     if top_st_qty is not None and top_st_val is not None:
         st.info(
-            f"🔹 **ST chênh lệch số lượng lớn nhất**: **{top_st_qty['Chi nhánh nhận']}** (Chênh lệch {top_st_qty['Chênh lệch']:,.2f} item).\n\n"
-            f"🔹 **ST chênh lệch giá trị lớn nhất**: **{top_st_val['Chi nhánh nhận']}** (Giá trị chênh lệch {top_st_val['Giá trị chênh lệch (VNĐ)']:,.0f} VNĐ)."
+            f"🔹 **ST chênh lệch số lượng lớn nhất**: **{top_st_qty['Chi nhánh nhận']}** (Chênh lệch {format_vn(top_st_qty['Chênh lệch'])} item).\n\n"
+            f"🔹 **ST chênh lệch giá trị lớn nhất**: **{top_st_val['Chi nhánh nhận']}** (Giá trị chênh lệch {format_vn(top_st_val['Giá trị chênh lệch (VNĐ)'])} VNĐ)."
         )
 
 if selected_date != "Tất cả các ngày":
@@ -566,10 +636,10 @@ if not df_loi.empty:
         top_freq_st = t1_loi.sort_values(by=['Số ngày tạo bổ sung', 'Tổng giá trị'], ascending=[False, False]).iloc[0]
         
         st.info(
-            f"🔹 **Tổng quan toàn hệ thống**: Trong kỳ báo cáo, ghi nhận **{total_st} siêu thị** phát sinh chênh lệch giao nhận với tổng giá trị là **{total_val:,.0f} VNĐ**.\n\n"
+            f"🔹 **Tổng quan toàn hệ thống**: Trong kỳ báo cáo, ghi nhận **{total_st} siêu thị** phát sinh chênh lệch giao nhận với tổng giá trị là **{format_vn(total_val)} VNĐ**.\n\n"
             f"🔹 **Cảnh báo tần suất Siêu thị**: **{top_freq_st['Name Mart']}** là điểm bán có tần suất sai lệch cao nhất, phát sinh nghiệp vụ tạo phiếu bổ sung trong **{top_freq_st['Số ngày tạo bổ sung']:.0f} ngày** (Khu vực GSM {top_freq_st['GSM phụ trách']}).\n\n"
-            f"🔹 **Giám sát trọng điểm (Cấp RSM)**: Vùng quản lý của RSM **{top_rsm['RSM phụ trách']}** đang ghi nhận tổng giá trị chênh lệch lớn nhất toàn chuỗi ({top_rsm['Giá trị tạo bổ sung']:,.0f} VNĐ, phân bổ trên {top_rsm['SL ST phát sinh']} siêu thị).\n\n"
-            f"🔹 **Giám sát trọng điểm (Cấp GSM)**: Khu vực của GSM **{top_gsm['GSM phụ trách']}** có giá trị phát sinh chênh lệch cao nhất ({top_gsm['Giá trị tạo bổ sung']:,.0f} VNĐ)."
+            f"🔹 **Giám sát trọng điểm (Cấp RSM)**: Vùng quản lý của RSM **{top_rsm['RSM phụ trách']}** đang ghi nhận tổng giá trị chênh lệch lớn nhất toàn chuỗi ({format_vn(top_rsm['Giá trị tạo bổ sung'])} VNĐ, phân bổ trên {top_rsm['SL ST phát sinh']} siêu thị).\n\n"
+            f"🔹 **Giám sát trọng điểm (Cấp GSM)**: Khu vực của GSM **{top_gsm['GSM phụ trách']}** có giá trị phát sinh chênh lệch cao nhất ({format_vn(top_gsm['Giá trị tạo bổ sung'])} VNĐ)."
         )
 
     # Bảng so sánh từng tuần
@@ -614,7 +684,7 @@ if not df_loi.empty:
             max_week = week_val_sum.idxmax()
             max_week_val = week_val_sum.max()
             st.info(
-                f"🔹 **Đỉnh điểm chênh lệch (Cảnh báo Tuần)**: **{max_week}** đang là tuần ghi nhận thiệt hại chênh lệch lớn nhất toàn hệ thống với tổng giá trị lên đến **{max_week_val:,.0f} VNĐ**."
+                f"🔹 **Đỉnh điểm chênh lệch (Cảnh báo Tuần)**: **{max_week}** đang là tuần ghi nhận thiệt hại chênh lệch lớn nhất toàn hệ thống với tổng giá trị lên đến **{format_vn(max_week_val)} VNĐ**."
             )
         
         def render_comparison(df_loi_week, group_cols, index_name, section_title):
