@@ -33,7 +33,6 @@ st.markdown("Dữ liệu tự động cập nhật từ Hệ thống Google Shee
 
 # Hàm làm sạch số liệu thông minh (Xử lý lẫn lộn định dạng Anh/Việt)
 def clean_number(x):
-    import pandas as pd
     if pd.isna(x) or x == '':
         return 0.0
     if isinstance(x, (int, float)):
@@ -268,7 +267,7 @@ def format_vn(val):
         return ""
     if isinstance(val, (int, float, np.integer, np.floating)):
         # Format chuẩn tiếng anh 1,234.56 -> đổi chéo phẩy và chấm
-        formatted = f"{format_vn(float(val))}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        formatted = f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         if formatted.endswith(',00'):
             return formatted[:-3]
         return formatted
