@@ -246,16 +246,6 @@ if st.button('🔄 Cập nhật dữ liệu mới nhất'):
     st.cache_data.clear()
     st.rerun()
 
-# Thẻ thông tin (Metrics)
-st.write("---")
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Tổng số lượng chuyển", format_vn(df_active['Số lượng chuyển'].sum()))
-with col2:
-    st.metric("Tổng số lượng nhận", format_vn(df_active['Số lượng nhận'].sum()))
-with col3:
-    st.metric("TỔNG CHÊNH LỆCH", format_vn(df_active['Chênh lệch'].sum()))
-
 # Hàm format màu đỏ cho số chênh lệch
 def color_red_for_chenhlech(val):
     color = 'red' if isinstance(val, (int, float)) and val > 0 else ''
@@ -272,6 +262,18 @@ def format_vn(val):
             return formatted[:-3]
         return formatted
     return val
+
+# Thẻ thông tin (Metrics)
+st.write("---")
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Tổng số lượng chuyển", format_vn(df_active['Số lượng chuyển'].sum()))
+with col2:
+    st.metric("Tổng số lượng nhận", format_vn(df_active['Số lượng nhận'].sum()))
+with col3:
+    st.metric("TỔNG CHÊNH LỆCH", format_vn(df_active['Chênh lệch'].sum()))
+
+
 
 def create_multiindex_headers(df, tong_df):
     if df.empty or tong_df.empty: return df
