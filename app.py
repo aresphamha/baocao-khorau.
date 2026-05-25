@@ -792,12 +792,12 @@ with tab_daily:
                 
             if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau']:
                 cat = 'Đã xử lý'
-                col_name = f"{col} \n {total_str}" if total_str else col
+                col_name = col
             else:
-                cat = col
-                col_name = total_str
+                cat = ''
+                col_name = col
                 
-            tuples.append((cat, col_name))
+            tuples.append((total_str, cat, col_name))
             
         df_renamed = df_show.copy()
         df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
