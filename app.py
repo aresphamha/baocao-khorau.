@@ -746,12 +746,12 @@ with tab_daily:
         grouped['Tỷ lệ line đã xử lý'] = (grouped['Số_lượng_line_đã_xử_lý'] / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
         
         grouped = grouped.rename(columns={
-            'Số_lượng_chuyển': 'Số lượng chuyển',
-            'Số_lượng_chênh_lệch': 'Số lượng chênh lệch',
-            'Số_lượng_line_chênh_lệch': 'Số lượng line chênh lệch',
-            'Số_lượng_line_đã_xử_lý': 'Số lượng line đã xử lý',
+            'Số_lượng_chuyển': 'SL chuyển',
+            'Số_lượng_chênh_lệch': 'SL chênh lệch',
+            'Số_lượng_line_chênh_lệch': 'SL line chênh lệch',
+            'Số_lượng_line_đã_xử_lý': 'SL line đã xử lý',
             'Số_lượng_hao_hụt': 'Số lượng hao hụt',
-            'Số_lượng_bs_ST': 'Số lượng bs ST',
+            'Số_lượng_bs_ST': 'SL bs ST',
             'SL_bs_kho_rau': 'SL bs kho rau',
             'Số_lượng_đang_xử_lý': 'Đang xử lý',
             'Số_lượng_chưa_xác_định': 'Chưa xử lý'
@@ -768,8 +768,8 @@ with tab_daily:
             if col == 'CLV2':
                 tong_df[col] = 'Tổng'
             elif col == 'Tỷ lệ line đã xử lý':
-                sum_line_xl = df['Số lượng line đã xử lý'].sum()
-                sum_line_cl = df['Số lượng line chênh lệch'].sum()
+                sum_line_xl = df['SL line đã xử lý'].sum()
+                sum_line_cl = df['SL line chênh lệch'].sum()
                 if sum_line_cl > 0:
                     tong_df[col] = str(round((sum_line_xl / sum_line_cl) * 100, 2)) + '%'
                 else:
@@ -781,14 +781,10 @@ with tab_daily:
                 
         tuples = []
         for col in cols:
-            if col in ['Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau']:
-                cat = '✔️ ĐÃ XỬ LÝ'
-            elif col == 'Đang xử lý':
-                cat = '🔄 ĐANG XỬ LÝ'
-            elif col == 'Chưa xử lý':
-                cat = '⏳ CHƯA XỬ LÝ'
+            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau']:
+                cat = 'Đã xử lý'
             else:
-                cat = 'ℹ️ THÔNG TIN CHUNG'
+                cat = ''
                 
             val = tong_df.iloc[0][col]
             if val not in [None, 'Tổng', '', 0] and pd.notna(val):
@@ -799,7 +795,7 @@ with tab_daily:
             else:
                 total_str = '⭐ TỔNG' if col == 'CLV2' else ''
                 
-            tuples.append((cat, total_str, col))
+            tuples.append((cat, col, total_str))
             
         df_renamed = df_show.copy()
         df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
@@ -807,7 +803,7 @@ with tab_daily:
 
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý (Tất cả)")
     df_b1 = calculate_daily_metrics(df_filtered)
-    cols = ['CLV2', 'Số lượng chuyển', 'Số lượng chênh lệch', 'Số lượng line chênh lệch', 'Số lượng line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b1, cols, "Bang_1")
     st.text_area("Nhận xét Bảng 1:", key="nx_b1")
     
@@ -817,7 +813,7 @@ with tab_daily:
     st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
     df_b21 = calculate_daily_metrics(df_kg_nhan)
-    cols2 = ['CLV2', 'Số lượng chuyển', 'Số lượng chênh lệch', 'Số lượng line chênh lệch', 'Số lượng line đã xử lý', 'Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b21, cols2, "Bang_2_1")
     st.text_area("Nhận xét Bảng 2.1:", key="nx_b21")
     
