@@ -117,7 +117,16 @@ def load_data():
     df = df[df['Ngày'].notna()]
     
     # Tạo cột hiển thị SKU
-    df['SKU_Full'] = df['Mã hàng'].astype(str) + " - " + df['Tên hàng'].astype(str)
+    if 'Tên hàng' in df.columns and 'Tên Hàng' in df.columns:
+        ten_hang = df['Tên hàng'].fillna(df['Tên Hàng'])
+    elif 'Tên hàng' in df.columns:
+        ten_hang = df['Tên hàng']
+    elif 'Tên Hàng' in df.columns:
+        ten_hang = df['Tên Hàng']
+    else:
+        ten_hang = pd.Series([''] * len(df))
+        
+    df['SKU_Full'] = df['Mã hàng'].fillna('').astype(str) + " - " + ten_hang.fillna('').astype(str)
     
     return df
 
@@ -803,6 +812,34 @@ with tab_daily:
         df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
         display_df_with_download(df_renamed.style.format(format_vn), f"Daily_{title_prefix}")
 
+    def format_custom_table_with_total(df, name_col, title_prefix):
+        if df.empty: return
+        
+        tong_df = pd.DataFrame(index=[0])
+        for col in df.columns:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                tong_df[col] = df[col].sum()
+            else:
+                tong_df[col] = ''
+                
+        tuples = []
+        for col in df.columns:
+            val = tong_df.iloc[0][col]
+            if val not in [None, 'Tổng', '', 0] and pd.notna(val):
+                if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
+                    total_str = f"🟡 {format_vn(val)}"
+                else:
+                    total_str = f"🟡 {str(val)}"
+            else:
+                total_str = '⭐ TỔNG' if col == name_col else ''
+                
+            tuples.append((total_str, col))
+            
+        df_renamed = df.copy()
+        df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
+        styler = df_renamed.style.format(format_vn).hide(axis="index")
+        display_df_with_download(styler, f"Daily_{title_prefix}")
+
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý (Tất cả)")
     df_b1 = calculate_daily_metrics(df_filtered)
     cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
@@ -848,7 +885,7 @@ with tab_daily:
         }, inplace=True)
         
         # Bảng
-        display_df_with_download(df_top_hh.style.format(format_vn), "Top_Hao_Hut_KG")
+        format_custom_table_with_total(df_top_hh, 'Mã & Tên hàng', "Top_Hao_Hut_KG")
         
         # Biểu đồ Top 10
         st.markdown("**📊 Biểu đồ Top 10 sản phẩm Hao hụt nhiều nhất**")
@@ -860,33 +897,39 @@ with tab_daily:
 
     st.write("---")
     st.subheader("Bảng 5: Chi tiết lý do Trả về Kho Rau (Phân tích theo NOTE - Cột T)")
-    st.markdown("Phân tích xem số lượng trả về kho rau là từ nguồn nào (coi cam, hình tele, hình kdb, ST nhận, Pick sai code...)")
+    st.markdown("Phân tích xem số lượng trả về kho rau là từ nguồn nào (coi cam, hình ảnh ST, DC giao sai ST, DC pick sai...)")
     df_kho_rau = df_filtered[df_filtered['Kho_Rau'] > 0].copy()
     if not df_kho_rau.empty:
-        df_kho_rau['NOTE_Clean'] = df_kho_rau['NOTE'].fillna('Không có ghi chú').replace('', 'Không có ghi chú')
+        def map_note_to_category(note):
+            note_str = str(note).lower().strip()
+            if note_str in ['', 'nan', 'none'] or pd.isna(note) or 'cam' in note_str:
+                return 'Check camera'
+            if 'tele' in note_str or 'kdb' in note_str or 'hình' in note_str:
+                return 'Hình ảnh ST'
+            if 'st nhận' in note_str or 'giao sai' in note_str:
+                return 'DC giao sai ST'
+            if 'pick sai' in note_str or 'lấy sai' in note_str:
+                return 'DC pick sai'
+            return 'Khác'
+            
+        df_kho_rau['Nguồn xác nhận'] = df_kho_rau['NOTE'].apply(map_note_to_category)
         
-        df_note = df_kho_rau.groupby('NOTE_Clean').agg(
+        df_note = df_kho_rau.groupby('Nguồn xác nhận').agg(
             SL_tra_kho_rau=('Kho_Rau', 'sum'),
             So_lan=('Mã hàng', 'count')
         ).reset_index()
         df_note = df_note.sort_values(by='SL_tra_kho_rau', ascending=False)
         df_note.rename(columns={
-            'NOTE_Clean': 'Nội dung NOTE (Cột T)',
             'SL_tra_kho_rau': 'SL trả về Kho Rau',
             'So_lan': 'Số lần phát sinh'
         }, inplace=True)
         
-        tong_sl = df_note['SL trả về Kho Rau'].sum()
-        tong_lan = df_note['Số lần phát sinh'].sum()
-        df_tong = pd.DataFrame([{'Nội dung NOTE (Cột T)': '⭐ TỔNG CỘNG', 'SL trả về Kho Rau': tong_sl, 'Số lần phát sinh': tong_lan}])
-        df_note_final = pd.concat([df_tong, df_note], ignore_index=True)
-        
         # Bảng
-        display_df_with_download(df_note_final.style.format(format_vn), "Chi_Tiet_Kho_Rau_Note")
+        format_custom_table_with_total(df_note, 'Nguồn xác nhận', "Chi_Tiet_Kho_Rau_Note")
         
         # Biểu đồ
-        st.markdown("**📊 Biểu đồ Số lượng trả về Kho Rau theo từng Ghi chú**")
-        chart_data_note = df_note.set_index('Nội dung NOTE (Cột T)')[['SL trả về Kho Rau']]
+        st.markdown("**📊 Biểu đồ Số lượng trả về Kho Rau theo Nguồn xác nhận**")
+        chart_data_note = df_note.set_index('Nguồn xác nhận')[['SL trả về Kho Rau']]
         st.bar_chart(chart_data_note)
     else:
         st.info("Không có dữ liệu Trả về Kho Rau trong kỳ báo cáo này.")
