@@ -781,11 +781,6 @@ with tab_daily:
                 
         tuples = []
         for col in cols:
-            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau']:
-                cat = 'Đã xử lý'
-            else:
-                cat = ''
-                
             val = tong_df.iloc[0][col]
             if val not in [None, 'Tổng', '', 0] and pd.notna(val):
                 if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
@@ -795,7 +790,14 @@ with tab_daily:
             else:
                 total_str = '⭐ TỔNG' if col == 'CLV2' else ''
                 
-            tuples.append((cat, col, total_str))
+            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau']:
+                cat = 'Đã xử lý'
+                col_name = f"{col} \n {total_str}" if total_str else col
+            else:
+                cat = col
+                col_name = total_str
+                
+            tuples.append((cat, col_name))
             
         df_renamed = df_show.copy()
         df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
