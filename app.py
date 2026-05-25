@@ -148,31 +148,50 @@ def generate_insights(df_raw, table_type, df_grouped=None):
     
     try:
         if table_type == "Bảng 1":
-            sum_hh = to_numeric(df_raw['Hao hụt']).sum()
-            sum_kr = to_numeric(df_raw['Kho_Rau']).sum()
-            sum_st = to_numeric(df_raw['BS_ST']).sum()
-            
-            totals = {'Hao hụt': sum_hh, 'Kho rau': sum_kr, 'Siêu thị': sum_st}
-            max_dest = max(totals, key=totals.get)
-            max_val = totals[max_dest]
-            
             df_raw_tmp = df_raw.copy()
-            df_raw_tmp['Tra_Ve'] = to_numeric(df_raw_tmp['Kho_Rau']) + to_numeric(df_raw_tmp['BS_ST'])
-            tra_ve_by_clv4 = df_raw_tmp.groupby('CLV4')['Tra_Ve'].sum()
+            df_raw_tmp['Chênh_lệch_num'] = to_numeric(df_raw_tmp['Chênh lệch'])
+            df_raw_tmp['Kho_Rau_num'] = to_numeric(df_raw_tmp['Kho_Rau'])
+            df_raw_tmp['BS_ST_num'] = to_numeric(df_raw_tmp['BS_ST'])
             
-            if not tra_ve_by_clv4.empty and tra_ve_by_clv4.max() > 0:
-                top_clv4_tra_ve = tra_ve_by_clv4.idxmax()
-                top_clv4_val = tra_ve_by_clv4.max()
-            else:
-                top_clv4_tra_ve = 'Không xác định'
-                top_clv4_val = 0
-                
+            total_lines = len(df_raw_tmp)
+            total_chenh_lech = df_raw_tmp['Chênh_lệch_num'].sum()
+            
             def fmt(val):
-                try:
-                    return f"{int(val):,}".replace(',', '.') if float(val).is_integer() else f"{float(val):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                try: return f"{int(val):,}".replace(',', '.') if float(val).is_integer() else f"{float(val):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
                 except: return str(val)
+                
+            msg = f"Trong kỳ có tổng cộng {total_lines} dòng phát sinh chênh lệch (Tổng chênh lệch: {fmt(total_chenh_lech)}).\n"
+            msg += "\n- Phân tích 3 nhóm ngành hàng (CLV4) phát sinh chênh lệch cao nhất:\n"
             
-            return f"Vấn đề chênh lệch được xử lý chuyển về [{max_dest}] là nhiều nhất với tổng số lượng: {fmt(max_val)}.\n- Trong đó, xét riêng lượng hàng trả về các điểm nhận (Kho Rau & ST), nhóm ngành hàng (CLV4) [{top_clv4_tra_ve}] đang chiếm tỷ trọng cao nhất với số lượng: {fmt(top_clv4_val)}.\n- Đề xuất: Tập trung rà soát chất lượng và quy trình giao nhận của nhóm {top_clv4_tra_ve}."
+            clv4_lines = df_raw_tmp['CLV4'].value_counts()
+            top3_clv4 = clv4_lines.head(3)
+            
+            for clv4, lines in top3_clv4.items():
+                sub_df = df_raw_tmp[df_raw_tmp['CLV4'] == clv4]
+                sub_cl = sub_df['Chênh_lệch_num'].sum()
+                sub_kr = sub_df['Kho_Rau_num'].sum()
+                msg += f"  + [{clv4}]: {lines} dòng (Tổng chênh lệch: {fmt(sub_cl)} | Trả về Kho Rau: {fmt(sub_kr)})\n"
+                
+            msg += "\n- Phân bổ trả về Siêu Thị (ST):\n"
+            st_by_clv4 = df_raw_tmp.groupby('CLV4')['BS_ST_num'].sum().sort_values(ascending=False)
+            st_by_clv4 = st_by_clv4[st_by_clv4 > 0]
+            
+            if not st_by_clv4.empty:
+                top_st_clv4 = st_by_clv4.index[0]
+                top_st_val = st_by_clv4.iloc[0]
+                total_st = st_by_clv4.sum()
+                if top_st_val > (total_st * 0.3) and len(st_by_clv4) > 1:
+                    msg += f"  Số lượng trả về ST tập trung nhiều nhất ở nhóm [{top_st_clv4}] ({fmt(top_st_val)}).\n"
+                elif len(st_by_clv4) > 1:
+                    msg += f"  Số lượng trả về ST nằm rải rác lẻ tẻ (cao nhất là [{top_st_clv4}] với {fmt(top_st_val)}).\n"
+                else:
+                    msg += f"  Số lượng trả về ST thuộc về nhóm [{top_st_clv4}] ({fmt(top_st_val)}).\n"
+            else:
+                msg += "  Không phát sinh số lượng chênh lệch trả về ST trong kỳ.\n"
+                
+            msg += "  -> Nguyên nhân: Do ST thao tác sai nên phải tạo lại thôi."
+            
+            return msg
             
         elif table_type == "Bảng 1.1":
             if df_grouped is not None and not df_grouped.empty:
@@ -190,23 +209,23 @@ def generate_insights(df_raw, table_type, df_grouped=None):
             
         elif table_type == "Bảng 2.1":
             clv4_counts = df_raw['CLV4'].value_counts()
-            top_clv4 = clv4_counts.index[0] if not clv4_counts.empty else 'Không xác định'
+            top3_clv4_str = ", ".join([f"[{k}] ({v} dòng)" for k, v in clv4_counts.head(3).items()]) if not clv4_counts.empty else 'Không xác định'
             
             sku_counts = df_raw['SKU_Full'].value_counts()
             top_sku = sku_counts.index[0] if not sku_counts.empty else 'Không xác định'
             top_sku_count = sku_counts.iloc[0] if not sku_counts.empty else 0
             
-            return f"- Ngành hàng (CLV4) chiếm đa số chênh lệch: [{top_clv4}].\n- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh."
+            return f"- Top 3 ngành hàng (CLV4) chiếm đa số chênh lệch: {top3_clv4_str}.\n- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh."
             
         elif table_type == "Bảng 3":
             clv4_counts = df_raw['CLV4'].value_counts()
-            top_clv4 = clv4_counts.index[0] if not clv4_counts.empty else 'Không xác định'
+            top3_clv4_str = ", ".join([f"[{k}] ({v} dòng)" for k, v in clv4_counts.head(3).items()]) if not clv4_counts.empty else 'Không xác định'
             
             sku_counts = df_raw['SKU_Full'].value_counts()
             top_sku = sku_counts.index[0] if not sku_counts.empty else 'Không xác định'
             top_sku_count = sku_counts.iloc[0] if not sku_counts.empty else 0
             
-            base_msg = f"- Ngành hàng (CLV4) chiếm đa số chênh lệch: [{top_clv4}].\n- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh."
+            base_msg = f"- Top 3 ngành hàng (CLV4) chiếm đa số chênh lệch: {top3_clv4_str}.\n- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh."
             
             df_kr = df_raw.copy()
             df_kr['Kho_Rau_num'] = to_numeric(df_kr['Kho_Rau'])
@@ -229,7 +248,7 @@ def generate_insights(df_raw, table_type, df_grouped=None):
             
         elif table_type == "Bảng 2.2":
             clv4_counts = df_raw['CLV4'].value_counts()
-            top_clv4 = clv4_counts.index[0] if not clv4_counts.empty else 'Không xác định'
+            top3_clv4_str = ", ".join([f"[{k}] ({v} dòng)" for k, v in clv4_counts.head(3).items()]) if not clv4_counts.empty else 'Không xác định'
             
             sku_counts = df_raw['SKU_Full'].value_counts()
             top_sku = sku_counts.index[0] if not sku_counts.empty else 'Không xác định'
@@ -242,7 +261,7 @@ def generate_insights(df_raw, table_type, df_grouped=None):
                 try: return f"{int(val):,}".replace(',', '.') if float(val).is_integer() else f"{float(val):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
                 except: return str(val)
                 
-            return (f"- Ngành hàng (CLV4) chiếm đa số chênh lệch: [{top_clv4}].\n"
+            return (f"- Top 3 ngành hàng (CLV4) chiếm đa số chênh lệch: {top3_clv4_str}.\n"
                     f"- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh.\n"
                     f"- Vấn đề chênh lệch này được phân bổ xử lý như sau:\n"
                     f"  + Trả về ST (Số lượng: {fmt(sum_st)}): Lý do là DC giao bù do ban đầu giao sai điểm.\n"
@@ -252,7 +271,11 @@ def generate_insights(df_raw, table_type, df_grouped=None):
             if df_grouped is not None and not df_grouped.empty:
                 top_sku = df_grouped.iloc[0]['Mã & Tên hàng']
                 top_hh = df_grouped.iloc[0]['Tổng số lượng hao hụt']
-                return f"Mã hàng có sản lượng hao hụt nghiêm trọng nhất là [{top_sku}] (Hao hụt: {top_hh} KG).\n- Khuyến nghị: Cần ưu tiên kiểm tra chất lượng thực tế và quy trình đóng gói đối với mã hàng này."
+                
+                clv4_counts = df_raw['CLV4'].value_counts()
+                top3_clv4_str = ", ".join([f"[{k}] ({v} dòng)" for k, v in clv4_counts.head(3).items()]) if not clv4_counts.empty else 'Không xác định'
+                
+                return f"- Top 3 ngành hàng (CLV4) phát sinh hao hụt nhiều nhất: {top3_clv4_str}.\n- Mã hàng có sản lượng hao hụt nghiêm trọng nhất là [{top_sku}] (Hao hụt: {top_hh} KG).\n- Khuyến nghị: Cần ưu tiên kiểm tra chất lượng thực tế và quy trình đóng gói đối với mã hàng này."
                 
     except Exception as e:
         return "Chưa đủ dữ liệu để tạo nhận xét tự động."
