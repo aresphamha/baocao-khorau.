@@ -142,6 +142,46 @@ def to_numeric(series):
         return pd.to_numeric(series.str.replace(',', '.'), errors='coerce').fillna(0)
     return pd.to_numeric(series, errors='coerce').fillna(0)
 
+def generate_insights(df_raw, table_type, df_grouped=None):
+    if df_raw.empty and (df_grouped is None or df_grouped.empty):
+        return "Không có dữ liệu trong kỳ báo cáo này."
+    
+    try:
+        if table_type == "Bảng 1":
+            total_lines = len(df_raw)
+            clv4_counts = df_raw['CLV4'].value_counts()
+            top_clv4 = clv4_counts.index[0] if not clv4_counts.empty else 'Không xác định'
+            top_clv4_count = clv4_counts.iloc[0] if not clv4_counts.empty else 0
+            
+            return f"Trong kỳ có tổng cộng {total_lines} dòng phát sinh chênh lệch.\n- Xét theo ngành hàng (CLV4), nhóm [{top_clv4}] đang chiếm tỷ trọng cao nhất với {top_clv4_count} dòng phát sinh.\n- Đề xuất: Cần giám sát chặt chẽ luồng hàng của nhóm {top_clv4}."
+            
+        elif table_type == "Bảng 1.1":
+            if df_grouped is not None and not df_grouped.empty:
+                top_nguon = df_grouped.iloc[0]['Nguồn xác nhận']
+                top_line = df_grouped.iloc[0]['Số line']
+                return f"Theo chi tiết xử lý, lý do phổ biến nhất đến từ nguồn [{top_nguon}] (với {top_line} dòng phát sinh).\n- Điều này cho thấy cần rà soát lại quy trình liên quan đến {top_nguon} để giảm thiểu sai sót."
+            
+        elif table_type in ["Bảng 2.1", "Bảng 2.2", "Bảng 3"]:
+            clv4_counts = df_raw['CLV4'].value_counts()
+            top_clv4 = clv4_counts.index[0] if not clv4_counts.empty else 'Không xác định'
+            
+            sku_counts = df_raw['SKU_Full'].value_counts()
+            top_sku = sku_counts.index[0] if not sku_counts.empty else 'Không xác định'
+            top_sku_count = sku_counts.iloc[0] if not sku_counts.empty else 0
+            
+            return f"- Ngành hàng (CLV4) chiếm đa số chênh lệch: [{top_clv4}].\n- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh.\n- Đề xuất: Cần làm việc trực tiếp với ngành hàng {top_clv4} và kiểm tra kỹ mã {top_sku}."
+            
+        elif table_type == "Bảng 4":
+            if df_grouped is not None and not df_grouped.empty:
+                top_sku = df_grouped.iloc[0]['Mã & Tên hàng']
+                top_hh = df_grouped.iloc[0]['Tổng số lượng hao hụt']
+                return f"Mã hàng có sản lượng hao hụt nghiêm trọng nhất là [{top_sku}] (Hao hụt: {top_hh} KG).\n- Khuyến nghị: Cần ưu tiên kiểm tra chất lượng thực tế và quy trình đóng gói đối với mã hàng này."
+                
+    except Exception as e:
+        return "Chưa đủ dữ liệu để tạo nhận xét tự động."
+        
+    return ""
+
 # ==========================================
 # GIAO DIỆN CHIA TAB
 # ==========================================
@@ -844,7 +884,8 @@ with tab_daily:
     df_b1 = calculate_daily_metrics(df_filtered)
     cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b1, cols, "Bang_1")
-    st.text_area("Nhận xét Bảng 1:", key="nx_b1")
+    nx_b1 = generate_insights(df_filtered, "Bảng 1")
+    st.text_area("Nhận xét Bảng 1:", value=nx_b1, key="nx_b1", height=100)
     
     st.write("---")
     st.subheader("Bảng 1.1: Chi tiết đã xử lý")
@@ -890,7 +931,10 @@ with tab_daily:
         format_custom_table_with_total(df_note, 'Nguồn xác nhận', "Chi_Tiet_Ly_Do_Xu_Ly")
     else:
         st.info("Không có dữ liệu xử lý cho Kho Rau & ST trong kỳ báo cáo này.")
-    st.text_area("Nhận xét Bảng 1.1:", key="nx_b1_1")
+        df_note = pd.DataFrame()
+        
+    nx_b1_1 = generate_insights(df_note_data, "Bảng 1.1", df_note)
+    st.text_area("Nhận xét Bảng 1.1:", value=nx_b1_1, key="nx_b1_1", height=100)
     
     st.subheader("Bảng 2: Đánh giá tình hình xử lý hàng theo ĐVT: KG")
     df_kg = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'KG'].copy()
@@ -900,19 +944,22 @@ with tab_daily:
     df_b21 = calculate_daily_metrics(df_kg_nhan)
     cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b21, cols2, "Bang_2_1")
-    st.text_area("Nhận xét Bảng 2.1:", key="nx_b21")
+    nx_b21 = generate_insights(df_kg_nhan, "Bảng 2.1")
+    st.text_area("Nhận xét Bảng 2.1:", value=nx_b21, key="nx_b21", height=120)
     
     st.markdown("**2.2 Hàng có số lượng nhận = 0, phát sinh chênh lệch**")
     df_kg_khongnhan = df_kg[to_numeric(df_kg['Số lượng nhận']) == 0]
     df_b22 = calculate_daily_metrics(df_kg_khongnhan)
     display_daily_table(df_b22, cols2, "Bang_2_2")
-    st.text_area("Nhận xét Bảng 2.2:", key="nx_b22")
+    nx_b22 = generate_insights(df_kg_khongnhan, "Bảng 2.2")
+    st.text_area("Nhận xét Bảng 2.2:", value=nx_b22, key="nx_b22", height=120)
     
     st.subheader("Bảng 3: Đánh giá theo tình hình hàng Pack")
     df_pack = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'PACK'].copy()
     df_b3 = calculate_daily_metrics(df_pack)
     display_daily_table(df_b3, cols2, "Bang_3")
-    st.text_area("Nhận xét Bảng 3:", key="nx_b3")
+    nx_b3 = generate_insights(df_pack, "Bảng 3")
+    st.text_area("Nhận xét Bảng 3:", value=nx_b3, key="nx_b3", height=120)
     
     st.write("---")
     st.subheader("Bảng 4: Top sản phẩm (KG) có lượng Hao Hụt phát sinh cao nhất")
@@ -934,5 +981,8 @@ with tab_daily:
         format_custom_table_with_total(df_top_hh, 'Mã & Tên hàng', "Top_Hao_Hut_KG")
     else:
         st.info("Không có dữ liệu hao hụt cho hàng KG trong kỳ báo cáo này.")
-    st.text_area("Nhận xét Bảng 4:", key="nx_b4")
+        df_top_hh = pd.DataFrame()
+        
+    nx_b4 = generate_insights(df_kg_hao_hut, "Bảng 4", df_top_hh)
+    st.text_area("Nhận xét Bảng 4:", value=nx_b4, key="nx_b4", height=100)
 
