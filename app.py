@@ -130,9 +130,29 @@ def load_data():
     
     return df
 
+@st.cache_data(ttl=3600)
+def load_transfer_25_5():
+    try:
+        url = 'https://docs.google.com/spreadsheets/d/1suHerEzgKzxB7g1UbrGIZPNaxK5a96xFnmxcIQywpko/export?format=xlsx'
+        df_clv2 = pd.read_excel(url, sheet_name='CLV2')
+        mapping_clv2 = dict(zip(df_clv2['Mã hàng'].astype(str), df_clv2['Cate Level 2']))
+        mapping_dvt = dict(zip(df_clv2['Mã hàng'].astype(str), df_clv2['ĐVT']))
+        
+        df_transfer = pd.read_excel(r'D:\Doi_Soat_Kho_Rau\AI\Chi tiết đi hàng 25.5.xlsx', sheet_name='transfer')
+        df_transfer['Mã hàng'] = df_transfer['Mã hàng'].astype(str)
+        df_transfer['Số lượng chuyển'] = pd.to_numeric(df_transfer['Số lượng chuyển'], errors='coerce').fillna(0)
+        df_transfer['Số lượng nhận'] = pd.to_numeric(df_transfer['Số lượng nhận'], errors='coerce').fillna(0)
+        df_transfer['CLV2'] = df_transfer['Mã hàng'].map(mapping_clv2)
+        df_transfer['ĐVT'] = df_transfer['Mã hàng'].map(mapping_dvt)
+        return df_transfer
+    except Exception as e:
+        print("Error loading transfer 25.5:", e)
+        return pd.DataFrame()
+
 # Load Data
-with st.spinner('Đang tải dữ liệu từ Google Sheets...'):
+with st.spinner('Đang tải dữ liệu từ Google Sheets và file hệ thống...'):
     df_all = load_data()
+    df_transfer_25_5 = load_transfer_25_5()
 
 st.write("---")
 
@@ -871,7 +891,7 @@ with tab_daily:
     # Lọc dữ liệu từ ngày 25/05/2026
     df_filtered = df_all[df_all['Ngày'] >= pd.to_datetime('2026-05-25')].copy()
     
-    def calculate_daily_metrics(data):
+    def calculate_daily_metrics(data, filter_type='all'):
         if data.empty: return pd.DataFrame()
         
         data['Số lượng chuyển_clean'] = to_numeric(data['Số lượng chuyển'])
@@ -891,6 +911,28 @@ with tab_daily:
             Số_lượng_đang_xử_lý=('CXD_HoanThanh', 'sum'),
             Số_lượng_chưa_xác_định=('CXD_DangXuLy', 'sum')
         ).reset_index()
+        
+        # Override SL chuyển if 25.5 and df_transfer_25_5 is loaded
+        dates = data['Ngày'].dropna().dt.date.unique()
+        if len(dates) == 1 and dates[0] == pd.to_datetime('2026-05-25').date() and not df_transfer_25_5.empty:
+            df_t = df_transfer_25_5.copy()
+            if filter_type == 'kg':
+                df_t = df_t[df_t['ĐVT'].astype(str).str.upper() == 'KG']
+            elif filter_type == 'pack':
+                df_t = df_t[df_t['ĐVT'].astype(str).str.upper() == 'PACK']
+            elif filter_type == 'kg_nhan':
+                df_t = df_t[(df_t['ĐVT'].astype(str).str.upper() == 'KG') & (df_t['Số lượng nhận'] > 0)]
+            elif filter_type == 'kg_khongnhan':
+                df_t = df_t[(df_t['ĐVT'].astype(str).str.upper() == 'KG') & (df_t['Số lượng nhận'] == 0)]
+                
+            transfer_grouped = df_t.groupby('CLV2')['Số lượng chuyển'].sum().reset_index()
+            grouped = grouped.drop(columns=['Số_lượng_chuyển'])
+            grouped = pd.merge(grouped, transfer_grouped, on='CLV2', how='left')
+            grouped.rename(columns={'Số lượng chuyển': 'Số_lượng_chuyển'}, inplace=True)
+            grouped['Số_lượng_chuyển'] = grouped['Số_lượng_chuyển'].fillna(0)
+            
+            cols_order = ['CLV2', 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định']
+            grouped = grouped[cols_order]
         
         grouped['Tỷ lệ line đã xử lý'] = (grouped['Số_lượng_line_đã_xử_lý'] / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
         
@@ -981,7 +1023,7 @@ with tab_daily:
         display_df_with_download(styler, f"Daily_{title_prefix}")
 
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý")
-    df_b1 = calculate_daily_metrics(df_filtered)
+    df_b1 = calculate_daily_metrics(df_filtered, filter_type='all')
     cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b1, cols, "Bang_1")
     nx_b1 = generate_insights(df_filtered, "Bảng 1")
@@ -1041,7 +1083,7 @@ with tab_daily:
     
     st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
-    df_b21 = calculate_daily_metrics(df_kg_nhan)
+    df_b21 = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
     cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b21, cols2, "Bang_2_1")
     nx_b21 = generate_insights(df_kg_nhan, "Bảng 2.1")
@@ -1049,14 +1091,14 @@ with tab_daily:
     
     st.markdown("**2.2 Hàng có số lượng nhận = 0, phát sinh chênh lệch**")
     df_kg_khongnhan = df_kg[to_numeric(df_kg['Số lượng nhận']) == 0]
-    df_b22 = calculate_daily_metrics(df_kg_khongnhan)
+    df_b22 = calculate_daily_metrics(df_kg_khongnhan, filter_type='kg_khongnhan')
     display_daily_table(df_b22, cols2, "Bang_2_2")
     nx_b22 = generate_insights(df_kg_khongnhan, "Bảng 2.2")
     st.text_area("Nhận xét Bảng 2.2:", value=nx_b22, key="nx_b22", height=120)
     
     st.subheader("Bảng 3: Đánh giá theo tình hình hàng Pack")
     df_pack = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'PACK'].copy()
-    df_b3 = calculate_daily_metrics(df_pack)
+    df_b3 = calculate_daily_metrics(df_pack, filter_type='pack')
     display_daily_table(df_b3, cols2, "Bang_3")
     nx_b3 = generate_insights(df_pack, "Bảng 3")
     st.text_area("Nhận xét Bảng 3:", value=nx_b3, key="nx_b3", height=120)
