@@ -846,6 +846,52 @@ with tab_daily:
     display_daily_table(df_b1, cols, "Bang_1")
     st.text_area("Nhận xét Bảng 1:", key="nx_b1")
     
+    st.write("---")
+    st.subheader("Bảng 1.1: Chi tiết đã xử lý")
+    st.markdown("SL xử lý xác định qua các thông tin: Check camera, Hình ảnh ST, DC giao sai ST, DC pick sai...")
+    
+    # Lọc các dòng có xử lý cho Kho Rau hoặc ST
+    df_note_data = df_filtered.copy()
+    df_note_data['Kho_Rau_num'] = to_numeric(df_note_data['Kho_Rau'])
+    df_note_data['BS_ST_num'] = to_numeric(df_note_data['BS_ST'])
+    df_note_data = df_note_data[(df_note_data['Kho_Rau_num'] > 0) | (df_note_data['BS_ST_num'] > 0)].copy()
+    
+    if not df_note_data.empty:
+        def map_note_to_category(note):
+            note_str = str(note).lower().strip()
+            if 'tele' in note_str or 'kdb' in note_str or 'hình' in note_str:
+                return 'Hình ảnh ST'
+            if 'st nhận' in note_str or 'giao sai' in note_str:
+                return 'DC giao sai ST'
+            if 'pick sai' in note_str or 'lấy sai' in note_str:
+                return 'DC pick sai'
+            return 'Check camera'
+            
+        df_note_data['Nguồn xác nhận'] = df_note_data['NOTE'].apply(map_note_to_category)
+        
+        df_note = df_note_data.groupby('Nguồn xác nhận').agg(
+            SL_bs_kho_rau=('Kho_Rau_num', 'sum'),
+            SL_bs_st=('BS_ST_num', 'sum'),
+            So_lan=('Mã hàng', 'count')
+        ).reset_index()
+        
+        df_note['Tổng (Kho Rau + ST)'] = df_note['SL_bs_kho_rau'] + df_note['SL_bs_st']
+        df_note = df_note.sort_values(by='Tổng (Kho Rau + ST)', ascending=False)
+        
+        df_note.rename(columns={
+            'SL_bs_kho_rau': 'SL bs kho rau',
+            'SL_bs_st': 'SL bs ST',
+            'So_lan': 'Số line'
+        }, inplace=True)
+        
+        df_note = df_note[['Nguồn xác nhận', 'SL bs kho rau', 'SL bs ST', 'Tổng (Kho Rau + ST)', 'Số line']]
+        
+        # Bảng
+        format_custom_table_with_total(df_note, 'Nguồn xác nhận', "Chi_Tiet_Ly_Do_Xu_Ly")
+    else:
+        st.info("Không có dữ liệu xử lý cho Kho Rau & ST trong kỳ báo cáo này.")
+    st.text_area("Nhận xét Bảng 1.1:", key="nx_b1_1")
+    
     st.subheader("Bảng 2: Đánh giá tình hình xử lý hàng theo ĐVT: KG")
     df_kg = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'KG'].copy()
     
@@ -881,7 +927,7 @@ with tab_daily:
         df_top_hh.rename(columns={
             'SKU_Full': 'Mã & Tên hàng',
             'Số_lượng_hao_hụt': 'Tổng số lượng hao hụt',
-            'Số_dòng_phát_sinh': 'Số lần phát sinh'
+            'Số_dòng_phát_sinh': 'Số line'
         }, inplace=True)
         
         # Bảng
@@ -890,48 +936,3 @@ with tab_daily:
         st.info("Không có dữ liệu hao hụt cho hàng KG trong kỳ báo cáo này.")
     st.text_area("Nhận xét Bảng 4:", key="nx_b4")
 
-    st.write("---")
-    st.subheader("Bảng 5: Chi tiết lý do xử lý (Kho Rau & ST)")
-    st.markdown("Phân tích xem số lượng xử lý (trả kho rau & bổ sung ST) là từ nguồn nào (Check camera, Hình ảnh ST, DC giao sai ST, DC pick sai...)")
-    
-    # Lọc các dòng có xử lý cho Kho Rau hoặc ST
-    df_note_data = df_filtered.copy()
-    df_note_data['Kho_Rau_num'] = to_numeric(df_note_data['Kho_Rau'])
-    df_note_data['BS_ST_num'] = to_numeric(df_note_data['BS_ST'])
-    df_note_data = df_note_data[(df_note_data['Kho_Rau_num'] > 0) | (df_note_data['BS_ST_num'] > 0)].copy()
-    
-    if not df_note_data.empty:
-        def map_note_to_category(note):
-            note_str = str(note).lower().strip()
-            if 'tele' in note_str or 'kdb' in note_str or 'hình' in note_str:
-                return 'Hình ảnh ST'
-            if 'st nhận' in note_str or 'giao sai' in note_str:
-                return 'DC giao sai ST'
-            if 'pick sai' in note_str or 'lấy sai' in note_str:
-                return 'DC pick sai'
-            return 'Check camera'
-            
-        df_note_data['Nguồn xác nhận'] = df_note_data['NOTE'].apply(map_note_to_category)
-        
-        df_note = df_note_data.groupby('Nguồn xác nhận').agg(
-            SL_bs_kho_rau=('Kho_Rau_num', 'sum'),
-            SL_bs_st=('BS_ST_num', 'sum'),
-            So_lan=('Mã hàng', 'count')
-        ).reset_index()
-        
-        df_note['Tổng (Kho Rau + ST)'] = df_note['SL_bs_kho_rau'] + df_note['SL_bs_st']
-        df_note = df_note.sort_values(by='Tổng (Kho Rau + ST)', ascending=False)
-        
-        df_note.rename(columns={
-            'SL_bs_kho_rau': 'SL bs kho rau',
-            'SL_bs_st': 'SL bs ST',
-            'So_lan': 'Số lần phát sinh'
-        }, inplace=True)
-        
-        df_note = df_note[['Nguồn xác nhận', 'SL bs kho rau', 'SL bs ST', 'Tổng (Kho Rau + ST)', 'Số lần phát sinh']]
-        
-        # Bảng
-        format_custom_table_with_total(df_note, 'Nguồn xác nhận', "Chi_Tiet_Ly_Do_Xu_Ly")
-    else:
-        st.info("Không có dữ liệu xử lý cho Kho Rau & ST trong kỳ báo cáo này.")
-    st.text_area("Nhận xét Bảng 5:", key="nx_b5")
