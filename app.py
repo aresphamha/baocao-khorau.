@@ -131,7 +131,7 @@ def load_data():
     return df
 
 @st.cache_data(ttl=3600)
-def load_transfer_25_5():
+def load_transfer_data_v2():
     try:
         url = 'https://docs.google.com/spreadsheets/d/1suHerEzgKzxB7g1UbrGIZPNaxK5a96xFnmxcIQywpko/export?format=xlsx'
         df_clv2 = pd.read_excel(url, sheet_name='CLV2')
@@ -152,7 +152,7 @@ def load_transfer_25_5():
 # Load Data
 with st.spinner('Đang tải dữ liệu từ Google Sheets và file hệ thống...'):
     df_all = load_data()
-    df_transfer_25_5 = load_transfer_25_5()
+    df_transfer_25_5 = load_transfer_data_v2()
 
 st.write("---")
 
@@ -162,9 +162,17 @@ def to_numeric(series):
         return pd.to_numeric(series.str.replace(',', '.'), errors='coerce').fillna(0)
     return pd.to_numeric(series, errors='coerce').fillna(0)
 
-def generate_insights(df_raw, table_type, df_grouped=None):
+def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None):
     if df_raw.empty and (df_grouped is None or df_grouped.empty):
         return "Không có dữ liệu trong kỳ báo cáo này."
+    
+    def get_hh_insight():
+        if df_metrics is not None and not df_metrics.empty and 'Số lượng chuyển' in df_metrics.columns and 'Số lượng hao hụt' in df_metrics.columns:
+            tong_chuyen = df_metrics['Số lượng chuyển'].sum()
+            tong_hh = df_metrics['Số lượng hao hụt'].sum()
+            if tong_chuyen > 0:
+                return f"\n- Tỷ lệ hao hụt ghi nhận: {round((tong_hh / tong_chuyen) * 100, 2)}%."
+        return ""
     
     try:
         if table_type == "Bảng 1":
@@ -210,6 +218,7 @@ def generate_insights(df_raw, table_type, df_grouped=None):
                 msg += "  Không phát sinh số lượng chênh lệch trả về ST trong kỳ.\n"
                 
             msg += "  -> Nguyên nhân: Do ST thao tác sai nên phải tạo lại thôi."
+            msg += get_hh_insight()
             
             return msg
             
@@ -235,7 +244,7 @@ def generate_insights(df_raw, table_type, df_grouped=None):
             top_sku = sku_counts.index[0] if not sku_counts.empty else 'Không xác định'
             top_sku_count = sku_counts.iloc[0] if not sku_counts.empty else 0
             
-            return f"- Top 3 ngành hàng (CLV4) chiếm đa số chênh lệch: {top3_clv4_str}.\n- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh."
+            return f"- Top 3 ngành hàng (CLV4) chiếm đa số chênh lệch: {top3_clv4_str}.\n- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh." + get_hh_insight()
             
         elif table_type == "Bảng 3":
             clv4_counts = df_raw['CLV4'].value_counts()
@@ -264,7 +273,7 @@ def generate_insights(df_raw, table_type, df_grouped=None):
             else:
                 top3_msg = "\n- Không ghi nhận hàng Pack nào có chênh lệch trả về Kho Rau trong kỳ."
                 
-            return base_msg + top3_msg.rstrip()
+            return base_msg + top3_msg.rstrip() + get_hh_insight()
             
         elif table_type == "Bảng 2.2":
             clv4_counts = df_raw['CLV4'].value_counts()
@@ -285,7 +294,8 @@ def generate_insights(df_raw, table_type, df_grouped=None):
                     f"- Đáng chú ý, mã hàng bị ảnh hưởng nhiều nhất là [{top_sku}] với {top_sku_count} dòng phát sinh.\n"
                     f"- Vấn đề chênh lệch này được phân bổ xử lý như sau:\n"
                     f"  + Trả về ST (Số lượng: {fmt(sum_st)}): Lý do là DC giao bù do ban đầu giao sai điểm.\n"
-                    f"  + Trả Kho Rau (Số lượng: {fmt(sum_kr)}): Do có ST khác nhận dư số này và có ST nhận thiếu.")
+                    f"  + Trả Kho Rau (Số lượng: {fmt(sum_kr)}): Do có ST khác nhận dư số này và có ST nhận thiếu."
+                    f"{get_hh_insight()}")
             
         elif table_type == "Bảng 4":
             if df_grouped is not None and not df_grouped.empty:
@@ -914,7 +924,7 @@ with tab_daily:
         
         # Override SL chuyển if 25.5 and df_transfer_25_5 is loaded
         dates = data['Ngày'].dropna().dt.date.unique()
-        if len(dates) == 1 and dates[0] == pd.to_datetime('2026-05-25').date() and not df_transfer_25_5.empty:
+        if pd.to_datetime('2026-05-25').date() in dates and not df_transfer_25_5.empty:
             df_t = df_transfer_25_5.copy()
             if filter_type == 'kg':
                 df_t = df_t[df_t['ĐVT'].astype(str).str.upper() == 'KG']
@@ -935,6 +945,12 @@ with tab_daily:
             grouped = grouped[cols_order]
         
         grouped['Tỷ lệ line đã xử lý'] = (grouped['Số_lượng_line_đã_xử_lý'] / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
+        
+        grouped['Tỷ lệ hao hụt'] = np.where(
+            grouped['Số_lượng_chuyển'] > 0, 
+            (grouped['Số_lượng_hao_hụt'] / grouped['Số_lượng_chuyển'] * 100).round(2).astype(str) + '%', 
+            '0.0%'
+        )
         
         grouped = grouped.rename(columns={
             'Số_lượng_chuyển': 'SL chuyển',
@@ -965,6 +981,13 @@ with tab_daily:
                     tong_df[col] = str(round((sum_line_xl / sum_line_cl) * 100, 2)) + '%'
                 else:
                     tong_df[col] = '0.0%'
+            elif col == 'Tỷ lệ hao hụt':
+                sum_hh = df['Số lượng hao hụt'].sum()
+                sum_ch = df['SL chuyển'].sum()
+                if sum_ch > 0:
+                    tong_df[col] = str(round((sum_hh / sum_ch) * 100, 2)) + '%'
+                else:
+                    tong_df[col] = '0.0%'
             elif pd.api.types.is_numeric_dtype(df[col]):
                 tong_df[col] = df[col].sum()
             else:
@@ -981,7 +1004,7 @@ with tab_daily:
             else:
                 total_str = '⭐ TỔNG' if col == 'CLV2' else ''
                 
-            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau']:
+            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt']:
                 cat = 'Đã xử lý'
                 col_name = col
             else:
@@ -1024,9 +1047,9 @@ with tab_daily:
 
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý")
     df_b1 = calculate_daily_metrics(df_filtered, filter_type='all')
-    cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b1, cols, "Bang_1")
-    nx_b1 = generate_insights(df_filtered, "Bảng 1")
+    nx_b1 = generate_insights(df_filtered, "Bảng 1", df_b1)
     st.text_area("Nhận xét Bảng 1:", value=nx_b1, key="nx_b1", height=100)
     
     st.write("---")
@@ -1084,23 +1107,23 @@ with tab_daily:
     st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
     df_b21 = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
-    cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b21, cols2, "Bang_2_1")
-    nx_b21 = generate_insights(df_kg_nhan, "Bảng 2.1")
+    nx_b21 = generate_insights(df_kg_nhan, "Bảng 2.1", df_b21)
     st.text_area("Nhận xét Bảng 2.1:", value=nx_b21, key="nx_b21", height=120)
     
     st.markdown("**2.2 Hàng có số lượng nhận = 0, phát sinh chênh lệch**")
     df_kg_khongnhan = df_kg[to_numeric(df_kg['Số lượng nhận']) == 0]
     df_b22 = calculate_daily_metrics(df_kg_khongnhan, filter_type='kg_khongnhan')
     display_daily_table(df_b22, cols2, "Bang_2_2")
-    nx_b22 = generate_insights(df_kg_khongnhan, "Bảng 2.2")
+    nx_b22 = generate_insights(df_kg_khongnhan, "Bảng 2.2", df_b22)
     st.text_area("Nhận xét Bảng 2.2:", value=nx_b22, key="nx_b22", height=120)
     
     st.subheader("Bảng 3: Đánh giá theo tình hình hàng Pack")
     df_pack = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'PACK'].copy()
     df_b3 = calculate_daily_metrics(df_pack, filter_type='pack')
     display_daily_table(df_b3, cols2, "Bang_3")
-    nx_b3 = generate_insights(df_pack, "Bảng 3")
+    nx_b3 = generate_insights(df_pack, "Bảng 3", df_b3)
     st.text_area("Nhận xét Bảng 3:", value=nx_b3, key="nx_b3", height=120)
     
     st.write("---")
