@@ -740,13 +740,47 @@ with tab_daily:
         ).reset_index()
         
         grouped['Tỷ lệ line đã xử lý'] = (grouped['Số_lượng_line_đã_xử_lý'] / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
+        
+        grouped = grouped.rename(columns={
+            'Số_lượng_chuyển': 'Số lượng chuyển',
+            'Số_lượng_chênh_lệch': 'Số lượng chênh lệch',
+            'Số_lượng_line_chênh_lệch': 'Số lượng line chênh lệch',
+            'Số_lượng_line_đã_xử_lý': 'Số lượng line đã xử lý',
+            'Số_lượng_hao_hụt': 'Số lượng hao hụt',
+            'Số_lượng_bs_ST': 'Số lượng bs ST',
+            'SL_bs_kho_rau': 'SL bs kho rau',
+            'Số_lượng_chưa_xác_định': 'Số lượng chưa xác định'
+        })
+        
         return grouped
+
+    def display_daily_table(df, cols, title_prefix):
+        if df.empty:
+            return
+        df_show = df[cols].copy()
+        tong_df = pd.DataFrame(index=[0])
+        for col in cols:
+            if col == 'CLV2':
+                tong_df[col] = 'Tổng'
+            elif col == 'Tỷ lệ line đã xử lý':
+                sum_line_xl = df['Số_lượng_line_đã_xử_lý'].sum()
+                sum_line_cl = df['Số_lượng_line_chênh_lệch'].sum()
+                if sum_line_cl > 0:
+                    tong_df[col] = str(round((sum_line_xl / sum_line_cl) * 100, 2)) + '%'
+                else:
+                    tong_df[col] = '0.0%'
+            elif pd.api.types.is_numeric_dtype(df[col]):
+                tong_df[col] = df[col].sum()
+            else:
+                tong_df[col] = ''
+                
+        df_renamed = create_multiindex_headers(df_show, tong_df)
+        display_df_with_download(df_renamed.style.format(format_vn), f"Daily_{title_prefix}")
 
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý (Tất cả)")
     df_b1 = calculate_daily_metrics(df_filtered)
-    cols = ['CLV2', 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_đã_xử_lý', 'Tỷ lệ line đã xử lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_chưa_xác_định']
-    if not df_b1.empty:
-        st.dataframe(df_b1[cols])
+    cols = ['CLV2', 'Số lượng chuyển', 'Số lượng chênh lệch', 'Số lượng line chênh lệch', 'Số lượng line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau', 'Số lượng chưa xác định']
+    display_daily_table(df_b1, cols, "Bang_1")
     st.text_area("Nhận xét Bảng 1:", key="nx_b1")
     
     st.subheader("Bảng 2: Đánh giá tình hình xử lý hàng theo ĐVT: KG")
@@ -755,21 +789,18 @@ with tab_daily:
     st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
     df_b21 = calculate_daily_metrics(df_kg_nhan)
-    cols2 = ['CLV2', 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau']
-    if not df_b21.empty:
-        st.dataframe(df_b21[cols2])
+    cols2 = ['CLV2', 'Số lượng chuyển', 'Số lượng chênh lệch', 'Số lượng line chênh lệch', 'Số lượng line đã xử lý', 'Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau']
+    display_daily_table(df_b21, cols2, "Bang_2_1")
     st.text_area("Nhận xét Bảng 2.1:", key="nx_b21")
     
     st.markdown("**2.2 Hàng có số lượng nhận = 0, phát sinh chênh lệch**")
     df_kg_khongnhan = df_kg[to_numeric(df_kg['Số lượng nhận']) == 0]
     df_b22 = calculate_daily_metrics(df_kg_khongnhan)
-    if not df_b22.empty:
-        st.dataframe(df_b22[cols2])
+    display_daily_table(df_b22, cols2, "Bang_2_2")
     st.text_area("Nhận xét Bảng 2.2:", key="nx_b22")
     
     st.subheader("Bảng 3: Đánh giá theo tình hình hàng Pack")
     df_pack = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'PACK'].copy()
     df_b3 = calculate_daily_metrics(df_pack)
-    if not df_b3.empty:
-        st.dataframe(df_b3[cols2])
+    display_daily_table(df_b3, cols2, "Bang_3")
     st.text_area("Nhận xét Bảng 3:", key="nx_b3")
