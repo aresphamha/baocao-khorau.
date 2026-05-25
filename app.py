@@ -763,8 +763,8 @@ with tab_daily:
             if col == 'CLV2':
                 tong_df[col] = 'Tổng'
             elif col == 'Tỷ lệ line đã xử lý':
-                sum_line_xl = df['Số_lượng_line_đã_xử_lý'].sum()
-                sum_line_cl = df['Số_lượng_line_chênh_lệch'].sum()
+                sum_line_xl = df['Số lượng line đã xử lý'].sum()
+                sum_line_cl = df['Số lượng line chênh lệch'].sum()
                 if sum_line_cl > 0:
                     tong_df[col] = str(round((sum_line_xl / sum_line_cl) * 100, 2)) + '%'
                 else:
