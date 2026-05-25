@@ -830,3 +830,64 @@ with tab_daily:
     df_b3 = calculate_daily_metrics(df_pack)
     display_daily_table(df_b3, cols2, "Bang_3")
     st.text_area("Nhận xét Bảng 3:", key="nx_b3")
+    
+    st.write("---")
+    st.subheader("Bảng 4: Top sản phẩm (KG) có lượng Hao Hụt phát sinh cao nhất")
+    st.markdown("Giúp theo dõi nhóm hàng KG nào thường xuyên hao hụt nhiều nhất.")
+    df_kg_hao_hut = df_kg[df_kg['Hao hụt'] > 0].copy()
+    if not df_kg_hao_hut.empty:
+        df_top_hh = df_kg_hao_hut.groupby('SKU_Full').agg(
+            Số_lượng_hao_hụt=('Hao hụt', 'sum'),
+            Số_dòng_phát_sinh=('Mã hàng', 'count')
+        ).reset_index()
+        df_top_hh = df_top_hh.sort_values(by='Số_lượng_hao_hụt', ascending=False)
+        df_top_hh.rename(columns={
+            'SKU_Full': 'Mã & Tên hàng',
+            'Số_lượng_hao_hụt': 'Tổng số lượng hao hụt',
+            'Số_dòng_phát_sinh': 'Số lần phát sinh'
+        }, inplace=True)
+        
+        # Bảng
+        display_df_with_download(df_top_hh.style.format(format_vn), "Top_Hao_Hut_KG")
+        
+        # Biểu đồ Top 10
+        st.markdown("**📊 Biểu đồ Top 10 sản phẩm Hao hụt nhiều nhất**")
+        chart_data = df_top_hh.head(10).set_index('Mã & Tên hàng')[['Tổng số lượng hao hụt']]
+        st.bar_chart(chart_data)
+    else:
+        st.info("Không có dữ liệu hao hụt cho hàng KG trong kỳ báo cáo này.")
+    st.text_area("Nhận xét Bảng 4:", key="nx_b4")
+
+    st.write("---")
+    st.subheader("Bảng 5: Chi tiết lý do Trả về Kho Rau (Phân tích theo NOTE - Cột T)")
+    st.markdown("Phân tích xem số lượng trả về kho rau là từ nguồn nào (coi cam, hình tele, hình kdb, ST nhận, Pick sai code...)")
+    df_kho_rau = df_filtered[df_filtered['Kho_Rau'] > 0].copy()
+    if not df_kho_rau.empty:
+        df_kho_rau['NOTE_Clean'] = df_kho_rau['NOTE'].fillna('Không có ghi chú').replace('', 'Không có ghi chú')
+        
+        df_note = df_kho_rau.groupby('NOTE_Clean').agg(
+            SL_tra_kho_rau=('Kho_Rau', 'sum'),
+            So_lan=('Mã hàng', 'count')
+        ).reset_index()
+        df_note = df_note.sort_values(by='SL_tra_kho_rau', ascending=False)
+        df_note.rename(columns={
+            'NOTE_Clean': 'Nội dung NOTE (Cột T)',
+            'SL_tra_kho_rau': 'SL trả về Kho Rau',
+            'So_lan': 'Số lần phát sinh'
+        }, inplace=True)
+        
+        tong_sl = df_note['SL trả về Kho Rau'].sum()
+        tong_lan = df_note['Số lần phát sinh'].sum()
+        df_tong = pd.DataFrame([{'Nội dung NOTE (Cột T)': '⭐ TỔNG CỘNG', 'SL trả về Kho Rau': tong_sl, 'Số lần phát sinh': tong_lan}])
+        df_note_final = pd.concat([df_tong, df_note], ignore_index=True)
+        
+        # Bảng
+        display_df_with_download(df_note_final.style.format(format_vn), "Chi_Tiet_Kho_Rau_Note")
+        
+        # Biểu đồ
+        st.markdown("**📊 Biểu đồ Số lượng trả về Kho Rau theo từng Ghi chú**")
+        chart_data_note = df_note.set_index('Nội dung NOTE (Cột T)')[['SL trả về Kho Rau']]
+        st.bar_chart(chart_data_note)
+    else:
+        st.info("Không có dữ liệu Trả về Kho Rau trong kỳ báo cáo này.")
+    st.text_area("Nhận xét Bảng 5:", key="nx_b5")
