@@ -727,20 +727,16 @@ with tab_daily:
         
         data['Số lượng chuyển_clean'] = to_numeric(data['Số lượng chuyển'])
         data['Chênh lệch_clean'] = to_numeric(data['Chênh lệch'])
-        data['Hạo hụt tự nhiên_clean'] = to_numeric(data['Hạo hụt tự nhiên'])
-        data['SLbổ sung cho ST_clean'] = to_numeric(data.get('SLbổ sung cho ST', data.get('Tổng ST', 0)))
-        data['SL trả kho rau_clean'] = to_numeric(data.get('Tổng kho rau', 0))
-        data['SL chưa xác định_clean'] = to_numeric(data.get('SL chênh lệch CXD', data.get('Tổng chưa xác định', 0)))
         
         grouped = data.groupby('CLV2', dropna=False).agg(
             Số_lượng_chuyển=('Số lượng chuyển_clean', 'sum'),
             Số_lượng_chênh_lệch=('Chênh lệch_clean', 'sum'),
             Số_lượng_line_chênh_lệch=('Mã hàng', 'count'),
-            Số_lượng_line_đã_xử_lý=('Trạng thái', lambda x: (x == 'Hoàn Thành').sum()),
-            Số_lượng_hao_hụt=('Hạo hụt tự nhiên_clean', 'sum'),
-            Số_lượng_bs_ST=('SLbổ sung cho ST_clean', 'sum'),
-            SL_bs_kho_rau=('SL trả kho rau_clean', 'sum'),
-            Số_lượng_chưa_xác_định=('SL chưa xác định_clean', 'sum')
+            Số_lượng_line_đã_xử_lý=('Xử lý', lambda x: (x.astype(str).str.strip().str.lower() == 'hoàn thành').sum()),
+            Số_lượng_hao_hụt=('Hao hụt', 'sum'),
+            Số_lượng_bs_ST=('BS_ST', 'sum'),
+            SL_bs_kho_rau=('Kho_Rau', 'sum'),
+            Số_lượng_chưa_xác_định=('CXD', 'sum')
         ).reset_index()
         
         grouped['Tỷ lệ line đã xử lý'] = (grouped['Số_lượng_line_đã_xử_lý'] / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
