@@ -728,6 +728,9 @@ with tab_daily:
         data['Số lượng chuyển_clean'] = to_numeric(data['Số lượng chuyển'])
         data['Chênh lệch_clean'] = to_numeric(data['Chênh lệch'])
         
+        data['CXD_HoanThanh'] = np.where(data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành', data['CXD'], 0)
+        data['CXD_DangXuLy'] = np.where(data['Xử lý'].astype(str).str.strip().str.lower() == 'đang xử lý', data['CXD'], 0)
+        
         grouped = data.groupby('CLV2', dropna=False).agg(
             Số_lượng_chuyển=('Số lượng chuyển_clean', 'sum'),
             Số_lượng_chênh_lệch=('Chênh lệch_clean', 'sum'),
@@ -736,7 +739,8 @@ with tab_daily:
             Số_lượng_hao_hụt=('Hao hụt', 'sum'),
             Số_lượng_bs_ST=('BS_ST', 'sum'),
             SL_bs_kho_rau=('Kho_Rau', 'sum'),
-            Số_lượng_chưa_xác_định=('CXD', 'sum')
+            Số_lượng_đang_xử_lý=('CXD_HoanThanh', 'sum'),
+            Số_lượng_chưa_xác_định=('CXD_DangXuLy', 'sum')
         ).reset_index()
         
         grouped['Tỷ lệ line đã xử lý'] = (grouped['Số_lượng_line_đã_xử_lý'] / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
@@ -749,7 +753,8 @@ with tab_daily:
             'Số_lượng_hao_hụt': 'Số lượng hao hụt',
             'Số_lượng_bs_ST': 'Số lượng bs ST',
             'SL_bs_kho_rau': 'SL bs kho rau',
-            'Số_lượng_chưa_xác_định': 'Số lượng chưa xác định'
+            'Số_lượng_đang_xử_lý': 'Đang xử lý',
+            'Số_lượng_chưa_xác_định': 'Chưa xử lý'
         })
         
         return grouped
@@ -774,12 +779,35 @@ with tab_daily:
             else:
                 tong_df[col] = ''
                 
-        df_renamed = create_multiindex_headers(df_show, tong_df)
+        tuples = []
+        for col in cols:
+            if col in ['Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau']:
+                cat = '✔️ ĐÃ XỬ LÝ'
+            elif col == 'Đang xử lý':
+                cat = '🔄 ĐANG XỬ LÝ'
+            elif col == 'Chưa xử lý':
+                cat = '⏳ CHƯA XỬ LÝ'
+            else:
+                cat = 'ℹ️ THÔNG TIN CHUNG'
+                
+            val = tong_df.iloc[0][col]
+            if val not in [None, 'Tổng', '', 0] and pd.notna(val):
+                if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
+                    total_str = f"🟡 {format_vn(val)}"
+                else:
+                    total_str = f"🟡 {str(val)}"
+            else:
+                total_str = '⭐ TỔNG' if col == 'CLV2' else ''
+                
+            tuples.append((cat, total_str, col))
+            
+        df_renamed = df_show.copy()
+        df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
         display_df_with_download(df_renamed.style.format(format_vn), f"Daily_{title_prefix}")
 
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý (Tất cả)")
     df_b1 = calculate_daily_metrics(df_filtered)
-    cols = ['CLV2', 'Số lượng chuyển', 'Số lượng chênh lệch', 'Số lượng line chênh lệch', 'Số lượng line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau', 'Số lượng chưa xác định']
+    cols = ['CLV2', 'Số lượng chuyển', 'Số lượng chênh lệch', 'Số lượng line chênh lệch', 'Số lượng line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b1, cols, "Bang_1")
     st.text_area("Nhận xét Bảng 1:", key="nx_b1")
     
@@ -789,7 +817,7 @@ with tab_daily:
     st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
     df_b21 = calculate_daily_metrics(df_kg_nhan)
-    cols2 = ['CLV2', 'Số lượng chuyển', 'Số lượng chênh lệch', 'Số lượng line chênh lệch', 'Số lượng line đã xử lý', 'Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau']
+    cols2 = ['CLV2', 'Số lượng chuyển', 'Số lượng chênh lệch', 'Số lượng line chênh lệch', 'Số lượng line đã xử lý', 'Số lượng hao hụt', 'Số lượng bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b21, cols2, "Bang_2_1")
     st.text_area("Nhận xét Bảng 2.1:", key="nx_b21")
     
