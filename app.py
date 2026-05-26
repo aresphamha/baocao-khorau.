@@ -927,12 +927,14 @@ with tab_daily:
         data['CXD_HoanThanh'] = np.where(data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành', data['CXD'], 0)
         data['CXD_DangXuLy'] = np.where(data['Xử lý'].astype(str).str.strip().str.lower() == 'đang xử lý', data['CXD'], 0)
         
+        data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
+        
         grouped = data.groupby('CLV2', dropna=False).agg(
             Số_lượng_chuyển=('Số lượng chuyển_clean', 'sum'),
             Số_lượng_chênh_lệch=('Chênh lệch_clean', 'sum'),
             Số_lượng_line_chênh_lệch=('Mã hàng', 'count'),
             Số_lượng_line_hao_hụt=('Hao hụt', lambda x: (x > 0).sum()),
-            Số_lượng_line_đã_xử_lý=('Xử lý', lambda x: (x.astype(str).str.strip().str.lower() == 'hoàn thành').sum()),
+            Số_lượng_line_đã_xử_lý=('Is_Da_Xu_Ly', 'sum'),
             Số_lượng_hao_hụt=('Hao hụt', 'sum'),
             Số_lượng_bs_ST=('BS_ST', 'sum'),
             SL_bs_kho_rau=('Kho_Rau', 'sum'),
