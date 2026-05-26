@@ -898,8 +898,8 @@ with tab_main:
 with tab_daily:
     st.header("Báo Cáo Năng Suất Chi Tiết Mỗi Ngày")
     
-    # Lọc dữ liệu từ ngày 25/05/2026 và tạo bộ lọc theo ngày
-    df_daily_all = df_all[df_all['Ngày'] >= pd.to_datetime('2026-05-25')].copy()
+    # Lọc dữ liệu từ ngày 01/05/2026 và tạo bộ lọc theo ngày
+    df_daily_all = df_all[df_all['Ngày'] >= pd.to_datetime('2026-05-01')].copy()
     
     unique_daily_dates = df_daily_all.sort_values(by='Ngày')['Ngày_str'].dropna().unique().tolist()
     if unique_daily_dates:
@@ -915,7 +915,7 @@ with tab_daily:
         else:
             df_filtered = df_daily_all[df_daily_all['Ngày_str'] == selected_daily_date].copy()
     else:
-        st.warning("Không có dữ liệu đối soát từ ngày 25/05/2026.")
+        st.warning("Không có dữ liệu đối soát từ ngày 01/05/2026.")
         df_filtered = pd.DataFrame()
     
     def calculate_daily_metrics(data, filter_type='all'):
