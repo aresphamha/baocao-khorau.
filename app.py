@@ -928,10 +928,12 @@ with tab_daily:
         data['CXD_DangXuLy'] = np.where(data['Xử lý'].astype(str).str.strip().str.lower() == 'đang xử lý', data['CXD'], 0)
         
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
+        data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
         
         grouped = data.groupby('CLV2', dropna=False).agg(
             Số_lượng_chuyển=('Số lượng chuyển_clean', 'sum'),
             Số_lượng_chênh_lệch=('Chênh lệch_clean', 'sum'),
+            Số_lượng_ST_chênh_lệch=('ST_Chenh_Lech', 'nunique'),
             Số_lượng_line_chênh_lệch=('Mã hàng', 'count'),
             Số_lượng_line_hao_hụt=('Hao hụt', lambda x: (x > 0).sum()),
             Số_lượng_line_đã_xử_lý=('Is_Da_Xu_Ly', 'sum'),
@@ -961,10 +963,9 @@ with tab_daily:
             grouped.rename(columns={'Số lượng chuyển': 'Số_lượng_chuyển'}, inplace=True)
             grouped['Số_lượng_chuyển'] = grouped['Số_lượng_chuyển'].fillna(0)
             
-            cols_order = ['CLV2', 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định']
+            cols_order = ['CLV2', 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_ST_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định']
             grouped = grouped[cols_order]
         
-        grouped['Số_lượng_line_còn_lại'] = grouped['Số_lượng_line_chênh_lệch'] - grouped['Số_lượng_line_đã_xử_lý'] - grouped['Số_lượng_line_hao_hụt']
         grouped['Tỷ lệ line đã xử lý'] = ((grouped['Số_lượng_line_đã_xử_lý'] + grouped['Số_lượng_line_hao_hụt']) / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
         
         grouped['Tỷ lệ hao hụt'] = np.where(
@@ -976,10 +977,10 @@ with tab_daily:
         grouped = grouped.rename(columns={
             'Số_lượng_chuyển': 'SL chuyển',
             'Số_lượng_chênh_lệch': 'SL chênh lệch',
+            'Số_lượng_ST_chênh_lệch': 'SL ST chênh lệch',
             'Số_lượng_line_chênh_lệch': 'SL line chênh lệch',
             'Số_lượng_line_hao_hụt': 'SL line hao hụt',
             'Số_lượng_line_đã_xử_lý': 'SL line đã xử lý',
-            'Số_lượng_line_còn_lại': 'SL line còn lại',
             'Số_lượng_hao_hụt': 'Số lượng hao hụt',
             'Số_lượng_bs_ST': 'SL bs ST',
             'SL_bs_kho_rau': 'SL bs kho rau',
@@ -1070,7 +1071,7 @@ with tab_daily:
 
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý")
     df_b1 = calculate_daily_metrics(df_filtered, filter_type='all')
-    cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'SL line còn lại', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b1, cols, "Bang_1")
     nx_b1 = generate_insights(df_filtered, "Bảng 1", df_b1)
     st.text_area("Nhận xét Bảng 1:", value=nx_b1, key="nx_b1", height=100)
@@ -1130,7 +1131,7 @@ with tab_daily:
     st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
     df_b21 = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
-    cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'SL line còn lại', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
     display_daily_table(df_b21, cols2, "Bang_2_1")
     nx_b21 = generate_insights(df_kg_nhan, "Bảng 2.1", df_b21)
     st.text_area("Nhận xét Bảng 2.1:", value=nx_b21, key="nx_b21", height=120)
