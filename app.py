@@ -1025,15 +1025,8 @@ with tab_daily:
                     total_str = f"🟡 {str(val)}"
             else:
                 total_str = '⭐ TỔNG' if col == 'CLV2' else ''
-                
-            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt']:
-                cat = 'Đã xử lý'
-                col_name = col
-            else:
-                cat = ''
-                col_name = col
-                
-            tuples.append((total_str, cat, col_name))
+            
+            tuples.append((total_str, col))
             
         df_renamed = df_show.copy()
         df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
