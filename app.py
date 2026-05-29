@@ -1194,14 +1194,14 @@ with tab_daily:
                 st.write(f"Còn tồn: {data['remaining']} items chưa xử lý")
                 cause_pct = round(data['cause_ratio'] * 100, 1)
                 st.write(f"Nguyên nhân lỗi chính: DC giao thiếu thực tế chiếm đến {cause_pct}% giá trị chênh lệch (tương đương ~{format_vn(data['return'])} VNĐ).")
-            # So sánh với ngày trước (nếu có)
-            if summary_prev:
-                diff_items = summary_today['total_items'] - summary_prev['total_items']
-                diff_value = summary_today['total_value'] - summary_prev['total_value']
-                st.write("---")
-                st.subheader(f"So sánh với ngày {summary_prev['date']}")
-                st.write(f"Tăng/giảm items: {diff_items:+d} ({round(diff_items/summary_prev['total_items']*100,1) if summary_prev['total_items'] else 0:+.1f}%)")
-                st.write(f"Tăng/giảm giá trị: {format_vn(diff_value):+} VNĐ ({round(diff_value/summary_prev['total_value']*100,1) if summary_prev['total_value'] else 0:+.1f}%)")
+            # Comparison with previous day omitted
+            #
+            #
+            #
+            #
+            #
+            #
+            #
     else:
         st.info("Vui lòng chọn một ngày cụ thể để xem báo cáo Bảng 1.")
     
