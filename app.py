@@ -530,22 +530,28 @@ summary_prev = compute_summary(df_active, prev_date_str) if prev_date_str else N
 if summary_today:
     st.subheader(f"📊 BÁO CÁO CHÊNH LỆCH ĐỐI SOÁT NGÀY {summary_today['date']}")
     st.write(f"Tổng: Lệch {summary_today['total_items']} items (~{format_vn(summary_today['total_value'])} VNĐ).")
-    st.write("\n**Kết quả xử lý:**")
+    st.write("")
+    st.write("**Kết quả xử lý:**")
     st.write(f"- Đã xử lý: {summary_today['processed_items']} items ({round(summary_today['processed_items']/summary_today['total_items']*100,1)}%)")
-    st.write(f"  - Trả về Kho rau {summary_today['returned_warehouse']} items")
-    st.write(f"  - Tạo bs ST {summary_today['created_bs']} items")
-    st.write(f"  - Hao hụt {summary_today['lost_items']} items (KG).")
+    st.write(f"- Trả về Kho rau {summary_today['returned_warehouse']} items")
+    st.write(f"- Tạo bs ST {summary_today['created_bs']} items")
+    st.write(f"- Hao hụt {summary_today['lost_items']} items (KG).")
     st.write(f"- Tồn lại: {summary_today['remaining_items']} items ({round(summary_today['remaining_items']/summary_today['total_items']*100,1)}%)")
     st.write("(gồm 5 item đang xử lý + các item chưa xử lý)\n---")
     # Chi tiết theo nhóm
     for cat, data in summary_today['cat_summary'].items():
         percent_value = (data['value']/summary_today['total_value']*100) if summary_today['total_value'] else 0
+        cat_processed = data['processed']
+        cat_return = data['return']
+        cat_lost = data['lost']
+        cat_bs = cat_processed - cat_return - cat_lost
+        cat_remaining = data['items'] - cat_processed
         st.write(f"**{cat}**")
         st.write(f"Chênh lệch: {data['items']} items (Giá trị: ~{format_vn(data['value'])} VNĐ - chiếm {round(percent_value,1)}% tổng giá trị lệch).")
-        st.write(f"Đã xử lý: {data['processed']} items (Trả về Kho rau {data['return']} items, bs ST {summary_today['created_bs']} items, Hao hụt {data['lost']} items).")
-        st.write(f"Còn tồn: {summary_today['remaining_items']} items chưa xử lý")
+        st.write(f"Đã xử lý: {cat_processed} items (Trả về Kho rau {cat_return} items, bs ST {cat_bs} items, Hao hụt {cat_lost} items).")
+        st.write(f"Còn tồn: {cat_remaining} items chưa xử lý")
         cause_percent = round(data['cause_ratio']*100,1)
-        st.write(f"Nguyên nhân lỗi chính: DC giao thiếu thực tế chiếm {cause_percent}% giá trị chênh lệch (tương đương ~{format_vn(data['return'])} VNĐ).\n")
+        st.write(f"Nguyên nhân lỗi chính: DC giao thiếu thực tế chiếm đến {cause_percent}% giá trị chênh lệch (tương đương ~{format_vn(cat_return)} VNĐ).")
 
     # So sánh với ngày trước nếu có
     if summary_prev:
