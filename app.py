@@ -455,6 +455,51 @@ with tab_main:
                 return formatted
         return val
 
+    # Hàm tính tổng hợp báo cáo Bảng 1 (theo mẫu)
+    def compute_daily_summary(df, date_str):
+        """Tính toán tổng hợp cho một ngày cụ thể."""
+        if df.empty:
+            return None
+        total_items = int(df['Chênh lệch'].sum())
+        total_value = df['Tổng GT'].sum()
+        processed = int((df['Kho_Rau'] + df['BS_ST'] + df['Hao hụt']).sum())
+        returned = int(df['Kho_Rau'].sum())
+        created_bs = int(df['BS_ST'].sum())
+        lost = int(df['Hao hụt'].sum())
+        remaining = total_items - processed
+        cat_summary = {}
+        for cat in df['CLV2'].dropna().unique():
+            df_cat = df[df['CLV2'] == cat]
+            cat_items = int(df_cat['Chênh lệch'].sum())
+            cat_value = df_cat['Tổng GT'].sum()
+            cat_processed = int((df_cat['Kho_Rau'] + df_cat['BS_ST'] + df_cat['Hao hụt']).sum())
+            cat_return = int(df_cat['Kho_Rau'].sum())
+            cat_lost = int(df_cat['Hao hụt'].sum())
+            cat_bs = cat_processed - cat_return - cat_lost
+            cat_remaining = cat_items - cat_processed
+            cause_ratio = (cat_return / cat_items) if cat_items else 0
+            cat_summary[cat] = {
+                'items': cat_items,
+                'value': cat_value,
+                'processed': cat_processed,
+                'return': cat_return,
+                'lost': cat_lost,
+                'bs': cat_bs,
+                'remaining': cat_remaining,
+                'cause_ratio': cause_ratio,
+            }
+        return {
+            'date': date_str,
+            'total_items': total_items,
+            'total_value': total_value,
+            'processed': processed,
+            'return': returned,
+            'bs': created_bs,
+            'lost': lost,
+            'remaining': remaining,
+            'cat_summary': cat_summary,
+        }
+
     # Thẻ thông tin (Metrics)
     st.write("---")
     col1, col2, col3 = st.columns(3)
@@ -534,6 +579,16 @@ with tab_main:
     # Bộ lọc theo ngày dùng chung cho các bảng chi tiết
     sorted_dates = [d for d in pivot_ngay['Ngày_str'] if d != 'Tổng']
     dates = ["Tất cả các ngày"] + sorted_dates
+
+# ---------------------- Lọc ngày Daily ----------------------
+selected_date = st.selectbox("🔍 Lọc theo ngày:", dates, index=0)
+if selected_date != "Tất cả các ngày":
+    df_filtered = df_active[df_active['Ngày_str'] == selected_date].copy()
+else:
+    df_filtered = df_active.copy()
+
+# Tính tổng hợp nhanh cho ngày đã chọn
+summary_today = compute_daily_summary(df_filtered, selected_date)
 
     st.write("---")
     st.subheader("🛒 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO NHÓM HÀNG (CLV4)")
