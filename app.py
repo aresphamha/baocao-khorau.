@@ -918,6 +918,184 @@ with tab_daily:
         st.warning("Không có dữ liệu đối soát từ ngày 01/05/2026.")
         df_filtered = pd.DataFrame()
     
+    def generate_daily_report_card(df_sel, df_all_daily, sel_date, all_dates):
+        """Tạo báo cáo chênh lệch đối soát theo ngày, có so sánh ngày trước."""
+        if df_sel.empty:
+            return
+        total_lines = len(df_sel)
+        total_gt = to_numeric(df_sel['Tổng GT']).sum()
+        df_w = df_sel.copy()
+        df_w['xuly_lower'] = df_w['Xử lý'].astype(str).str.strip().str.lower()
+        df_w['kho_rau_n'] = to_numeric(df_w['Kho_Rau'])
+        df_w['bs_st_n']   = to_numeric(df_w['BS_ST'])
+        df_w['hao_hut_n'] = to_numeric(df_w['Hao hụt'])
+        df_w['gt_n']      = to_numeric(df_w['Tổng GT'])
+        done_mask = df_w['xuly_lower'] == 'hoàn thành'
+        dang_mask = df_w['xuly_lower'] == 'đang xử lý'
+        total_done = int(done_mask.sum())
+        total_dang = int(dang_mask.sum())
+        total_chua = int((~df_w['xuly_lower'].isin(['hoàn thành', 'đang xử lý'])).sum())
+        total_ton  = total_dang + total_chua
+        kho_rau_lines = int((df_w['kho_rau_n'] > 0).sum())
+        bs_st_lines   = int((df_w['bs_st_n'] > 0).sum())
+        is_kg         = df_w['Loại hàng'].astype(str).str.upper() == 'KG'
+        hao_hut_lines = int(((df_w['hao_hut_n'] > 0) & is_kg).sum())
+        pct_done  = round(total_done / total_lines * 100) if total_lines > 0 else 0
+        pct_ton   = 100 - pct_done
+        gt_trieu  = total_gt / 1_000_000
+        date_label = sel_date if sel_date != "Tất cả các ngày" else "TẤT CẢ CÁC NGÀY"
+        # So sánh ngày trước
+        prev_line = ""
+        all_dates_list = list(all_dates)
+        if sel_date != "Tất cả các ngày" and sel_date in all_dates_list:
+            idx = all_dates_list.index(sel_date)
+            if idx > 0:
+                prev_date = all_dates_list[idx - 1]
+                df_prev   = df_all_daily[df_all_daily['Ngày_str'] == prev_date].copy()
+                if not df_prev.empty:
+                    prev_done = (df_prev['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành').sum()
+                    prev_pct  = round(prev_done / len(df_prev) * 100)
+                    delta     = pct_done - prev_pct
+                    sign      = "+" if delta > 0 else ""
+                    if abs(delta) >= 20:
+                        arrow = "📈 TĂNG" if delta > 0 else "📉 GIẢM"
+                        prev_line = f"\n\n> ⚠️ **CẢNH BÁO đột biến**: So với ngày {prev_date}, tỷ lệ xử lý **{arrow} {sign}{delta:.0f}%** ({prev_pct}% → {pct_done}%)"
+                    else:
+                        arrow = "↑" if delta > 0 else ("↓" if delta < 0 else "→")
+                        prev_line = f"\n\n> 📊 So với ngày {prev_date}: {arrow} {sign}{delta:.0f}% ({prev_pct}% → {pct_done}%)"
+        header_md = (
+            f"---\n### 📋 BÁO CÁO CHÊNH LỆCH ĐỐI SOÁT NGÀY {date_label}\n"
+            f"**Tổng: Lệch {total_lines:,} items (~{gt_trieu:.1f} triệu VNĐ)**\n\n"
+            f"**Kết quả xử lý:**\n"
+            f"- ✅ **Đã xử lý:** {total_done:,} items ({pct_done}%)\n"
+            f"  - Trả về Kho rau: {kho_rau_lines:,} items\n"
+            f"  - Tạo bs ST: {bs_st_lines:,} items\n"
+            f"  - Hao hụt: {hao_hut_lines:,} items (KG)\n"
+            f"- ⏳ **Tồn lại:** {total_ton:,} items ({pct_ton}%) "
+            f"_(gồm {total_dang:,} item đang xử lý + {total_chua:,} items chưa xử lý)_"
+            f"{prev_line}\n\n**Chi tiết theo nhóm hàng:**"
+        )
+        st.markdown(header_md)
+        clv2_order = sorted(df_w['CLV2'].dropna().unique())
+        for clv2 in clv2_order:
+            grp = df_w[df_w['CLV2'] == clv2]
+            g_total    = len(grp)
+            g_gt       = grp['gt_n'].sum()
+            g_pct_gt   = round(g_gt / total_gt * 100) if total_gt > 0 else 0
+            g_gt_trieu = g_gt / 1_000_000
+            g_done     = int((grp['xuly_lower'] == 'hoàn thành').sum())
+            g_dang     = int((grp['xuly_lower'] == 'đang xử lý').sum())
+            g_chua     = int((~grp['xuly_lower'].isin(['hoàn thành', 'đang xử lý'])).sum())
+            g_ton      = g_dang + g_chua
+            g_kho = int((to_numeric(grp['Kho_Rau']) > 0).sum())
+            g_st  = int((to_numeric(grp['BS_ST']) > 0).sum())
+            g_hh  = int(((to_numeric(grp['Hao hụt']) > 0) & (grp['Loại hàng'].astype(str).str.upper() == 'KG')).sum())
+            loi_text = ""
+            if 'Lỗi' in grp.columns:
+                loi_f   = grp[grp['Lỗi'].astype(str).str.strip().str.lower() != 'hao hụt'].copy()
+                loi_f['gt_l'] = to_numeric(loi_f['Tổng GT'])
+                loi_sum = loi_f.groupby('Lỗi')['gt_l'].sum().sort_values(ascending=False)
+                if not loi_sum.empty:
+                    top_loi = loi_sum.index[0]
+                    top_val = loi_sum.iloc[0]
+                    pct_loi = round(top_val / g_gt * 100) if g_gt > 0 else 0
+                    loi_text = f"\n📌 **Nguyên nhân lỗi chính**: *{top_loi}* — chiếm **{pct_loi}%** giá trị (~{top_val/1_000_000:.1f} triệu VNĐ)"
+            if g_dang > 0 and g_chua > 0:
+                ton_text = f"{g_dang} đang xử lý + {g_chua} chưa xử lý"
+            elif g_dang > 0:
+                ton_text = f"{g_dang} đang xử lý"
+            elif g_chua > 0:
+                ton_text = f"{g_chua} chưa xử lý"
+            else:
+                ton_text = ""
+            ton_detail = f"Còn tồn: **{g_ton} items** ({ton_text})" if g_ton > 0 else "✅ Đã xử lý hoàn toàn"
+            grp_md = (
+                f"\n**{clv2}** | {g_total:,} items — ~{g_gt_trieu:.1f} triệu VNĐ (chiếm {g_pct_gt}% tổng)\n"
+                f"Đã xử lý: {g_done:,} items (Kho rau: {g_kho} | bs ST: {g_st} | Hao hụt: {g_hh} KG)\n"
+                f"{ton_detail}{loi_text}\n\n{'─'*40}"
+            )
+            st.markdown(grp_md)
+
+    def generate_weekly_summary(df_all_daily, sel_date, all_dates):
+        """Tạo bảng đánh giá 7 ngày gần nhất."""
+        st.subheader("📅 Bảng Đánh Giá 7 Ngày Gần Nhất")
+        all_dates_list = list(all_dates)
+        if sel_date != "Tất cả các ngày" and sel_date in all_dates_list:
+            idx          = all_dates_list.index(sel_date)
+            recent_dates = all_dates_list[max(0, idx - 6): idx + 1]
+        else:
+            recent_dates = all_dates_list[-7:]
+        if not recent_dates:
+            st.info("Chưa có đủ dữ liệu để tổng hợp tuần.")
+            return
+        df_week = df_all_daily[df_all_daily['Ngày_str'].isin(recent_dates)].copy()
+        if df_week.empty:
+            return
+        df_week['xuly_lower'] = df_week['Xử lý'].astype(str).str.strip().str.lower()
+        df_week['gt_n']  = to_numeric(df_week['Tổng GT'])
+        rows = []
+        for d in recent_dates:
+            dg = df_week[df_week['Ngày_str'] == d]
+            if dg.empty:
+                continue
+            t_lines  = len(dg)
+            t_done   = int((dg['xuly_lower'] == 'hoàn thành').sum())
+            t_dang   = int((dg['xuly_lower'] == 'đang xử lý').sum())
+            t_chua   = int((~dg['xuly_lower'].isin(['hoàn thành', 'đang xử lý'])).sum())
+            t_gt     = dg['gt_n'].sum()
+            pct_done = round(t_done / t_lines * 100) if t_lines > 0 else 0
+            top_loi  = ""
+            if 'Lỗi' in dg.columns:
+                loi_f   = dg[dg['Lỗi'].astype(str).str.strip().str.lower() != 'hao hụt']
+                loi_sum = loi_f.groupby('Lỗi')['gt_n'].sum().sort_values(ascending=False)
+                if not loi_sum.empty:
+                    pct_l   = round(loi_sum.iloc[0] / t_gt * 100) if t_gt > 0 else 0
+                    top_loi = f"{loi_sum.index[0]} ({pct_l}%)"
+            clv2_gt   = dg.groupby('CLV2')['gt_n'].sum().sort_values(ascending=False)
+            top_clv2  = f"{clv2_gt.index[0]} ({round(clv2_gt.iloc[0]/t_gt*100) if t_gt > 0 else 0}%)" if not clv2_gt.empty else ""
+            rows.append({
+                'Ngày': d,
+                'Tổng lines CL': t_lines,
+                'GT (tr.đ)': round(t_gt / 1_000_000, 1),
+                'Đã xử lý': t_done,
+                '% Xử lý': f"{pct_done}%",
+                'Tồn (Đang+Chưa)': f"{t_dang}+{t_chua}",
+                'Nhóm CL lớn nhất': top_clv2,
+                'Nguyên nhân lỗi chính': top_loi,
+            })
+        df_summary = pd.DataFrame(rows)
+        if df_summary.empty:
+            return
+        # Highlight nếu % xử lý thay đổi >= 20% so với ngày trước
+        pct_vals = []
+        for v in df_summary['% Xử lý']:
+            try: pct_vals.append(int(str(v).replace('%', '')))
+            except: pct_vals.append(0)
+        def highlight_row(row):
+            i = df_summary.index.get_loc(row.name)
+            base = [''] * len(row)
+            if i > 0 and abs(pct_vals[i] - pct_vals[i-1]) >= 20:
+                base = ['background-color:#ffcccc;font-weight:bold'] * len(row)
+            return base
+        st.dataframe(df_summary.style.apply(highlight_row, axis=1), use_container_width=True, hide_index=True)
+        # Tóm tắt tuần
+        w_gt   = df_week['gt_n'].sum()
+        w_done = int((df_week['xuly_lower'] == 'hoàn thành').sum())
+        w_pct  = round(w_done / len(df_week) * 100) if len(df_week) > 0 else 0
+        top3_loi = ""
+        if 'Lỗi' in df_week.columns:
+            loi_wk  = df_week[df_week['Lỗi'].astype(str).str.strip().str.lower() != 'hao hụt']
+            loi_sum = loi_wk.groupby('Lỗi')['gt_n'].sum().sort_values(ascending=False)
+            top3_loi = " | ".join(loi_sum.head(3).index.tolist()) if not loi_sum.empty else "N/A"
+        top_clv2_wk  = df_week.groupby('CLV2')['gt_n'].sum().sort_values(ascending=False)
+        top_clv2_str = f"{top_clv2_wk.index[0]} ({round(top_clv2_wk.iloc[0]/w_gt*100) if w_gt > 0 else 0}%)" if not top_clv2_wk.empty else "N/A"
+        st.info(
+            f"**Tổng kết {len(recent_dates)} ngày ({recent_dates[0]} – {recent_dates[-1]}):** "
+            f"{len(df_week):,} lines CL | GT ~{w_gt/1_000_000:.1f} triệu VNĐ | "
+            f"Đã xử lý **{w_pct}%** | Nhóm CL cao nhất: **{top_clv2_str}** | "
+            f"Top lỗi: {top3_loi}"
+        )
+
     def calculate_daily_metrics(data, filter_type='all'):
         if data.empty: return pd.DataFrame()
         
