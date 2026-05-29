@@ -1197,7 +1197,7 @@ with tab_daily:
                 st.write(f"Nguyên nhân lỗi chính: DC giao thiếu thực tế chiếm đến {cause_pct}% giá trị chênh lệch (tương đương ~{format_vn(data['return'])} VNĐ).")
             # Hiển thị Bảng 1 gốc (cột và số liệu)
             df_b1 = calculate_daily_metrics(df_filtered, filter_type='all')
-            cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chẽnh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+            cols = ['CLV2', 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_ST_chênh lệch', 'Số_lượng_line_chênh lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Tỷ lệ line đã xử lý', 'Số_lượng_hao_hụt', 'Tỷ lệ hao hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang xử lý', 'Số_lượng_chưa xử lý']
             display_daily_table(df_b1, cols, "Bang_1")
             nx_b1 = generate_insights(df_filtered, "Bảng 1", df_b1)
             st.text_area("Nhận xét Bảng 1:", value=nx_b1, key="nx_b1", height=100)
