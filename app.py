@@ -1162,6 +1162,7 @@ with tab_daily:
     # BÁO CÁO BẢNG 1 - THEO MẪU
     # ==============================
     st.subheader("BÁO CÁO CHÊNH LỆCH ĐỐI SOÁT NGÀY " + selected_daily_date)
+    st.markdown("**Đánh giá nhanh tình hình xử lý:**")
     if selected_daily_date != "Tất cả các ngày":
         # Tính toán tổng hợp cho ngày hiện tại
         summary_today = compute_daily_summary(df_filtered, selected_daily_date)
