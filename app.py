@@ -917,6 +917,97 @@ with tab_daily:
     else:
         st.warning("Không có dữ liệu đối soát từ ngày 01/05/2026.")
         df_filtered = pd.DataFrame()
+
+        # -------------------------------------------------
+        # BÁO CÁO BẢNG 1 THEO NGÀY CHỌN (cùng mẫu cung cấp)
+        # -------------------------------------------------
+        def compute_daily_summary(df, date_str):
+            """Tính toán tổng hợp cho một ngày cụ thể.
+            Returns dict with overall totals and per‑category details.
+            """
+            if df.empty:
+                return None
+            total_items = int(df['Chênh lệch'].sum())
+            total_value = df['Tổng GT'].sum()
+            processed = int((df['Kho_Rau'] + df['BS_ST'] + df['Hao hụt']).sum())
+            returned = int(df['Kho_Rau'].sum())
+            created_bs = int(df['BS_ST'].sum())
+            lost = int(df['Hao hụt'].sum())
+            remaining = total_items - processed
+            # Phân nhóm theo CLV2 (ngành hàng)
+            cat_summary = {}
+            for cat in df['CLV2'].dropna().unique():
+                df_cat = df[df['CLV2'] == cat]
+                cat_items = int(df_cat['Chênh lệch'].sum())
+                cat_value = df_cat['Tổng GT'].sum()
+                cat_processed = int((df_cat['Kho_Rau'] + df_cat['BS_ST'] + df_cat['Hao hụt']).sum())
+                cat_return = int(df_cat['Kho_Rau'].sum())
+                cat_lost = int(df_cat['Hao hụt'].sum())
+                cat_bs = cat_processed - cat_return - cat_lost
+                cat_remaining = cat_items - cat_processed
+                cause_ratio = (cat_return / cat_items) if cat_items else 0
+                cat_summary[cat] = {
+                    'items': cat_items,
+                    'value': cat_value,
+                    'processed': cat_processed,
+                    'return': cat_return,
+                    'lost': cat_lost,
+                    'bs': cat_bs,
+                    'remaining': cat_remaining,
+                    'cause_ratio': cause_ratio,
+                }
+            return {
+                'date': date_str,
+                'total_items': total_items,
+                'total_value': total_value,
+                'processed': processed,
+                'return': returned,
+                'bs': created_bs,
+                'lost': lost,
+                'remaining': remaining,
+                'cat_summary': cat_summary,
+            }
+
+        # Nếu người dùng đã chọn một ngày cụ thể, hiển thị báo cáo.
+        if selected_daily_date != "Tất cả các ngày":
+            summary_today = compute_daily_summary(df_filtered, selected_daily_date)
+            # Tìm ngày liền kề (ngày trước) trong dữ liệu gốc
+            prev_date = None
+            if selected_daily_date in unique_daily_dates:
+                idx = unique_daily_dates.index(selected_daily_date)
+                if idx > 0:
+                    prev_date = unique_daily_dates[idx - 1]
+            summary_prev = compute_daily_summary(df_daily_all[df_daily_all['Ngày_str'] == prev_date], prev_date) if prev_date else None
+
+            if summary_today:
+                st.subheader(f"📊 BÁO CÁO CHÊNH LỆCH ĐỐI SOÁT NGÀY {summary_today['date']}")
+                st.write(f"Tổng: Lệch {summary_today['total_items']} items (~{format_vn(summary_today['total_value'])} VNĐ).")
+                st.write("**Kết quả xử lý:**")
+                st.write(f"- Đã xử lý: {summary_today['processed']} items ({round(summary_today['processed']/summary_today['total_items']*100,1)}%)")
+                st.write(f"- Trả về Kho rau: {summary_today['return']} items")
+                st.write(f"- Tạo bs ST: {summary_today['bs']} items")
+                st.write(f"- Hao hụt: {summary_today['lost']} items (KG).")
+                st.write(f"- Tồn lại: {summary_today['remaining']} items ({round(summary_today['remaining']/summary_today['total_items']*100,1)}%)")
+                st.write("(gồm 5 item đang xử lý + các item chưa xử lý)")
+                st.write("---")
+                # Chi tiết theo nhóm
+                for cat, data in summary_today['cat_summary'].items():
+                    percent_value = (data['value']/summary_today['total_value']*100) if summary_today['total_value'] else 0
+                    st.write(f"**{cat}**")
+                    st.write(f"Chênh lệch: {data['items']} items (Giá trị: ~{format_vn(data['value'])} VNĐ - chiếm {round(percent_value,1)}% tổng giá trị lệch).")
+                    st.write(f"Đã xử lý: {data['processed']} items (Trả về Kho rau {data['return']} items, bs ST {data['bs']} items, Hao hụt {data['lost']} items).")
+                    st.write(f"Còn tồn: {data['remaining']} items chưa xử lý")
+                    cause_pct = round(data['cause_ratio']*100,1)
+                    st.write(f"Nguyên nhân lỗi chính: DC giao thiếu thực tế chiếm đến {cause_pct}% giá trị chênh lệch (tương đương ~{format_vn(data['return'])} VNĐ).")
+                # So sánh với ngày trước
+                if summary_prev:
+                    diff_items = summary_today['total_items'] - summary_prev['total_items']
+                    diff_value = summary_today['total_value'] - summary_prev['total_value']
+                    st.write("---")
+                    st.subheader(f"📈 So sánh với ngày {summary_prev['date']}")
+                    st.write(f"Tăng/giảm items: {diff_items:+d} ({round(diff_items/summary_prev['total_items']*100,1) if summary_prev['total_items'] else 0:+.1f}%)")
+                    st.write(f"Tăng/giảm giá trị: {format_vn(diff_value):+} VNĐ ({round(diff_value/summary_prev['total_value']*100,1) if summary_prev['total_value'] else 0:+.1f}%)")
+
     
     def calculate_daily_metrics(data, filter_type='all'):
         if data.empty: return pd.DataFrame()
