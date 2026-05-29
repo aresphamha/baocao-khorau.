@@ -455,93 +455,6 @@ with tab_main:
                 return formatted
         return val
 
-    # Hàm tính tổng hợp báo cáo Bảng 1 (theo mẫu)
-    def compute_daily_summary(df, date_str):
-        """Tính toán tổng hợp cho một ngày cụ thể."""
-        if df.empty:
-            return None
-        total_items = int(df['Chênh lệch'].sum())
-        total_value = df['Tổng GT'].sum()
-        processed = int((df['Kho_Rau'] + df['BS_ST'] + df['Hao hụt']).sum())
-        returned = int(df['Kho_Rau'].sum())
-        created_bs = int(df['BS_ST'].sum())
-        lost = int(df['Hao hụt'].sum())
-        remaining = total_items - processed
-        cat_summary = {}
-        for cat in df['CLV2'].dropna().unique():
-            df_cat = df[df['CLV2'] == cat]
-            cat_items = int(df_cat['Chênh lệch'].sum())
-            cat_value = df_cat['Tổng GT'].sum()
-            cat_processed = int((df_cat['Kho_Rau'] + df_cat['BS_ST'] + df_cat['Hao hụt']).sum())
-            cat_return = int(df_cat['Kho_Rau'].sum())
-            cat_lost = int(df_cat['Hao hụt'].sum())
-            cat_bs = cat_processed - cat_return - cat_lost
-            cat_remaining = cat_items - cat_processed
-            cause_ratio = (cat_return / cat_items) if cat_items else 0
-            cat_summary[cat] = {
-                'items': cat_items,
-                'value': cat_value,
-                'processed': cat_processed,
-                'return': cat_return,
-                'lost': cat_lost,
-                'bs': cat_bs,
-                'remaining': cat_remaining,
-                'cause_ratio': cause_ratio,
-            }
-        return {
-            'date': date_str,
-            'total_items': total_items,
-            'total_value': total_value,
-            'processed': processed,
-            'return': returned,
-            'bs': created_bs,
-            'lost': lost,
-            'remaining': remaining,
-            'cat_summary': cat_summary,
-        }
-
-    # Thẻ thông tin (Metrics)
-    st.write("---")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-                        tuples.append(('⭐ TỔNG', col))
-                    else:
-                        tuples.append(('', col))
-            else:
-    tab_ngay_qty, tab_ngay_val = st.tabs(["📊 Số lượng (Từng Ngày)", "💰 Giá trị (Từng Ngày)"])
-
-    with tab_ngay_qty:
-        display_df_with_download(pivot_ngay_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_ngay_renamed.columns if 'Chênh lệch' in c[1] and 'Giá trị' not in c[1] and 'SKU' not in c[1]]), "Tong_Hop_Theo_Ngay_So_Luong")
-
-    with tab_ngay_val:
-        display_df_with_download(pivot_ngay_val_renamed.style.format(format_vn), "Tong_Hop_Theo_Ngay_Gia_Tri")
-
-    st.write("---")
-    col4, col5 = st.columns(2)
-    with col4:
-        st.subheader("🔥 2. TOP 5 CATE CHÊNH LỆCH LỚN NHẤT")
-        st.write("### 📌 Đánh giá nhanh tình hình")
-        if not pivot_clv4.empty:
-            top_clv4 = pivot_clv4.iloc[0]
-            st.info(f"🔹 **Mã hàng (CLV4) cảnh báo đỏ**: **{top_clv4['CLV4']}** đang dẫn đầu với mức chênh lệch {format_vn(top_clv4['Chênh lệch'])}.")
-        display_df_with_download(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), "Top_5_CLV4")
-    with col5:
-        st.subheader("📦 3. TỔNG HỢP THEO NGÀNH HÀNG (CLV2)")
-        st.write("### 📌 Đánh giá nhanh tình hình")
-        if not pivot_clv2.empty:
-            top_clv2 = pivot_clv2.iloc[0]
-            st.info(f"🔹 **Ngành hàng (CLV2) trọng điểm**: **{top_clv2['CLV2']}** chiếm số lượng chênh lệch cao nhất ({format_vn(top_clv2['Chênh lệch'])}).")
-        display_df_with_download(pivot_clv2_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_clv2_renamed.columns if 'Chênh lệch' in c[1] and 'SL' not in c[1]]), "Tong_Hop_CLV2")
-
-    # Thẻ thông tin (Metrics)
-    st.write("---")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Tổng số lượng chuyển", format_vn(df_active['Số lượng chuyển'].sum()))
-    with col2:
-        st.metric("Tổng số lượng nhận", format_vn(df_active['Số lượng nhận'].sum()))
-    with col3:
-        st.metric("TỔNG CHÊNH LỆCH", format_vn(df_active['Chênh lệch'].sum()))
     # Thẻ thông tin (Metrics)
     st.write("---")
     col1, col2, col3 = st.columns(3)
@@ -622,35 +535,11 @@ with tab_main:
     sorted_dates = [d for d in pivot_ngay['Ngày_str'] if d != 'Tổng']
     dates = ["Tất cả các ngày"] + sorted_dates
 
-# ---------------------- Lọc ngày Daily ----------------------
-selected_date = st.selectbox("🔍 Lọc theo ngày:", dates, index=0)
-if selected_date != "Tất cả các ngày":
-    df_filtered = df_active[df_active['Ngày_str'] == selected_date].copy()
-else:
-    df_filtered = df_active.copy()
+    st.write("---")
+    st.subheader("🛒 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO NHÓM HÀNG (CLV4)")
 
-# Tính tổng hợp nhanh cho ngày đã chọn
-summary_today = compute_daily_summary(df_filtered, selected_date)
-
-st.write("---")
-st.subheader("🛒 4. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO NHÓM HÀNG (CLV4)")
-
-item_qty_sum = df_active.groupby(['Ngày_str', 'CLV4'], dropna=False)[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
-item_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'CLV4'], dropna=False).size().rename('SL ST chênh lệch')
-item_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'CLV4'], dropna=False).size().rename('SL ST nhập=0')
-
-pivot_qty_item = item_qty_sum.join(item_qty_count).join(item_qty_nhap0).fillna(0).reset_index()
-
-if 'SL ST chênh lệch' not in pivot_qty_item.columns:
-    pivot_qty_item['SL ST chênh lệch'] = 0
-if 'SL ST nhập=0' not in pivot_qty_item.columns:
-    pivot_qty_item['SL ST nhập=0'] = 0
-
-pivot_qty_item['SL ST chênh lệch'] = pivot_qty_item['SL ST chênh lệch'].astype(int)
-pivot_qty_item['SL ST nhập=0'] = pivot_qty_item['SL ST nhập=0'].astype(int)
-pivot_qty_item.insert(2, 'SL ST NHẬP = 0/SL ST CHÊNH LỆCH', pivot_qty_item['SL ST nhập=0'].astype(str) + " / " + pivot_qty_item['SL ST chênh lệch'].astype(str))
-
-
+    item_qty_sum = df_active.groupby(['Ngày_str', 'CLV4'], dropna=False)[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
+    item_qty_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby(['Ngày_str', 'CLV4'], dropna=False).size().rename('SL ST chênh lệch')
     item_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'CLV4'], dropna=False).size().rename('SL ST nhập=0')
 
     pivot_qty_item = item_qty_sum.join(item_qty_count).join(item_qty_nhap0).fillna(0).reset_index()
