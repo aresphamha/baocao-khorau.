@@ -567,6 +567,73 @@ with tab_main:
             st.info(f"🔹 **Mã hàng (CLV4) cảnh báo đỏ**: **{top_clv4['CLV4']}** đang dẫn đầu với mức chênh lệch {format_vn(top_clv4['Chênh lệch'])}.")
         display_df_with_download(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), "Top_5_CLV4")
     with col5:
+    # Thẻ thông tin (Metrics)
+    st.write("---")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Tổng số lượng chuyển", format_vn(df_active['Số lượng chuyển'].sum()))
+    with col2:
+        st.metric("Tổng số lượng nhận", format_vn(df_active['Số lượng nhận'].sum()))
+    with col3:
+        st.metric("TỔNG CHÊNH LỆCH", format_vn(df_active['Chênh lệch'].sum()))
+
+    def create_multiindex_headers(df, tong_df):
+        if df.empty or tong_df.empty: return df
+        
+        tuples = []
+        for i, col in enumerate(df.columns):
+            if col in tong_df.columns:
+                val = tong_df.iloc[0][col]
+                if val not in [None, 'Tổng', '', 0] and pd.notna(val):
+                    if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
+                        tuples.append((f"🟡 {format_vn(val)}", col))
+                    else:
+                        tuples.append((f"🟡 {str(val)}", col))
+                else:
+                    if i == 0:
+                        tuples.append(('⭐ TỔNG', col))
+                    else:
+                        tuples.append(('', col))
+            else:
+                if i == 0:
+                    tuples.append(('⭐ TỔNG', col))
+                else:
+                    tuples.append(('', col))
+                    
+        df_new = df.copy()
+        df_new.columns = pd.MultiIndex.from_tuples(tuples)
+        return df_new
+
+    pivot_ngay_renamed = create_multiindex_headers(pivot_ngay, tong_row_ngay)
+    pivot_ngay_val_renamed = create_multiindex_headers(pivot_ngay_val, tong_row_ngay_val)
+    pivot_clv2_renamed = create_multiindex_headers(pivot_clv2, tong_row_clv2)
+
+    # Layout cho các bảng
+    st.write("---")
+    st.subheader("📅 1. TỔNG HỢP THEO TỪNG NGÀY")
+    st.write("### 📌 Đánh giá nhanh tình hình")
+    if not pivot_ngay.empty:
+        top_day = pivot_ngay.sort_values(by='Chênh lệch', ascending=False).iloc[0]
+        st.info(f"🔹 **Ngày biến động nhất**: **{top_day['Ngày_str']}** ghi nhận mức chênh lệch cao nhất ({format_vn(top_day['Chênh lệch'])} item / {format_vn(top_day['Giá trị chênh lệch (VNĐ)'])} VNĐ).")
+
+    tab_ngay_qty, tab_ngay_val = st.tabs(["📊 Số lượng (Từng Ngày)", "💰 Giá trị (Từng Ngày)"])
+
+    with tab_ngay_qty:
+        display_df_with_download(pivot_ngay_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in pivot_ngay_renamed.columns if 'Chênh lệch' in c[1] and 'Giá trị' not in c[1] and 'SKU' not in c[1]]), "Tong_Hop_Theo_Ngay_So_Luong")
+
+    with tab_ngay_val:
+        display_df_with_download(pivot_ngay_val_renamed.style.format(format_vn), "Tong_Hop_Theo_Ngay_Gia_Tri")
+
+    st.write("---")
+    col4, col5 = st.columns(2)
+    with col4:
+        st.subheader("🔥 2. TOP 5 CATE CHÊNH LỆCH LỚN NHẤT")
+        st.write("### 📌 Đánh giá nhanh tình hình")
+        if not pivot_clv4.empty:
+            top_clv4 = pivot_clv4.iloc[0]
+            st.info(f"🔹 **Mã hàng (CLV4) cảnh báo đỏ**: **{top_clv4['CLV4']}** đang dẫn đầu với mức chênh lệch {format_vn(top_clv4['Chênh lệch'])}.")
+        display_df_with_download(pivot_clv4.style.format(format_vn).map(color_red_for_chenhlech, subset=['Chênh lệch']), "Top_5_CLV4")
+    with col5:
         st.subheader("📦 3. TỔNG HỢP THEO NGÀNH HÀNG (CLV2)")
         st.write("### 📌 Đánh giá nhanh tình hình")
         if not pivot_clv2.empty:
@@ -607,9 +674,6 @@ if 'SL ST nhập=0' not in pivot_qty_item.columns:
 pivot_qty_item['SL ST chênh lệch'] = pivot_qty_item['SL ST chênh lệch'].astype(int)
 pivot_qty_item['SL ST nhập=0'] = pivot_qty_item['SL ST nhập=0'].astype(int)
 pivot_qty_item.insert(2, 'SL ST NHẬP = 0/SL ST CHÊNH LỆCH', pivot_qty_item['SL ST nhập=0'].astype(str) + " / " + pivot_qty_item['SL ST chênh lệch'].astype(str))
-
-
-
 
 
     item_qty_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby(['Ngày_str', 'CLV4'], dropna=False).size().rename('SL ST nhập=0')
