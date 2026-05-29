@@ -1175,3 +1175,26 @@ with tab_daily:
     nx_b4 = generate_insights(df_kg_hao_hut, "Bảng 4", df_top_hh)
     st.text_area("Nhận xét Bảng 4:", value=nx_b4, key="nx_b4", height=100)
 
+# ---------------------- Đánh giá nhanh (Bảng 1) ----------------------
+if summary_today:
+    st.write(f"Tổng: Lệch {summary_today['total_items']} items (~{format_vn(summary_today['total_value'])} VNĐ).")
+    st.write("**Kết quả xử lý:**")
+    pct_done = round(summary_today['processed'] / summary_today['total_items'] * 100) if summary_today['total_items'] else 0
+    st.write(f"- Đã xử lý: {summary_today['processed']} items ({pct_done}%)")
+    st.write(f"- Trả về Kho rau {summary_today['return']} items")
+    st.write(f"- Tạo bs ST {summary_today['bs']} items")
+    st.write(f"- Hao hụt {summary_today['lost']} items (KG).")
+    pct_remain = round(summary_today['remaining'] / summary_today['total_items'] * 100) if summary_today['total_items'] else 0
+    st.write(f"- Tồn lại: {summary_today['remaining']} items ({pct_remain}%)")
+    st.write("(gồm 5 item đang xử lý + 87 items chưa xử lý)")
+    st.write("---")
+    # Chi tiết theo nhóm
+    for cat, data in summary_today['cat_summary'].items():
+        percent_value = (data['value'] / summary_today['total_value'] * 100) if summary_today['total_value'] else 0
+        st.write(f"**{cat.upper()}**")
+        st.write(f"Chênh lệch: {data['items']} items (Giá trị: ~{format_vn(data['value'])} VNĐ - chiếm {round(percent_value,1)}% tổng giá trị lệch).")
+        st.write(f"Đã xử lý: {data['processed']} items (Trả về Kho rau {data['return']} items, bs ST {data['bs']} items, Hao hụt {data['lost']} items).")
+        st.write(f"Còn tồn: {data['remaining']} items chưa xử lý")
+        cause_pct = round(data['cause_ratio'] * 100, 1)
+        st.write(f"Nguyên nhân lỗi chính: DC giao thiếu thực tế chiếm đến {cause_pct}% giá trị chênh lệch (tương đương ~{format_vn(data['return'])} VNĐ).")
+# ----------------------------------------------------------------
