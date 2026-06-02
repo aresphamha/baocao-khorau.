@@ -84,7 +84,8 @@ def load_data():
     # Đồng bộ tên cột Tháng 4 cho giống với Tháng 5
     df_apr.rename(columns={
         'ST': 'ID ST',
-        'SL chênh lệch ĐXL': 'SL chênh lệch CXD'
+        'SL chênh lệch ĐXL': 'SL chênh lệch CXD',
+        'SLbổ sung cho ST': 'SL trả tồn về ST'
     }, inplace=True)
     
     df = pd.concat([df_apr, df_may], ignore_index=True)
@@ -103,7 +104,11 @@ def load_data():
     df['LyDo_Y'] = df['Kho rau\nChưa xác định'].astype(str).str.strip().str.lower()
     
     df['Qty_N'] = df['Hạo hụt tự nhiên'].apply(clean_number)
-    df['Qty_O'] = df['SLbổ sung cho ST'].apply(clean_number)
+    
+    # Handle column name change between months
+    qty_o_col = 'SL trả tồn về ST' if 'SL trả tồn về ST' in df.columns else 'SLbổ sung cho ST'
+    df['Qty_O'] = df.get(qty_o_col, pd.Series(0, index=df.index)).apply(clean_number)
+    
     df['Qty_P'] = df['SL chênh lệch CXD'].apply(clean_number)
     
     df['Hao hụt'] = np.where(df['LyDo_W'].str.contains('hao hụt'), df['Qty_N'], 0)
@@ -455,6 +460,86 @@ with tab_main:
                 return formatted
         return val
 
+    def format_money(val):
+        if val >= 1000000:
+            return f"{val/1000000:.1f} triệu".replace('.', ',')
+        elif val >= 1000:
+            return f"{val/1000:.1f} ngàn".replace('.', ',')
+        return format_vn(val)
+
+    def compute_daily_summary(df, date_str):
+        """Calculate daily summary for given DataFrame and date string."""
+        if df.empty:
+            return None
+        total_items = int(df['Chênh lệch'].sum())
+        total_value = df['Tổng GT'].sum()
+        
+        df_kho_rau = pd.to_numeric(df['Kho_Rau'], errors='coerce').fillna(0)
+        df_bs_st = pd.to_numeric(df['BS_ST'], errors='coerce').fillna(0)
+        df_hao_hut = pd.to_numeric(df['Hao hụt'], errors='coerce').fillna(0)
+        
+        processed = int((df_kho_rau + df_bs_st + df_hao_hut).sum())
+        returned = int(df_kho_rau.sum())
+        created_bs = int(df_bs_st.sum())
+        lost = int(df_hao_hut.sum())
+        remaining = total_items - processed
+        
+        # Breakdown remaining
+        df_cxd = pd.to_numeric(df['CXD'], errors='coerce').fillna(0)
+        xuly_status = df['Xử lý'].astype(str).str.strip().str.lower()
+        pending = int(np.where(xuly_status == 'hoàn thành', df_cxd, 0).sum())
+        unprocessed = remaining - pending
+        if unprocessed < 0: unprocessed = 0
+        
+        cat_summary = {}
+        for cat in df['CLV2'].dropna().unique():
+            df_cat = df[df['CLV2'] == cat]
+            c_items = int(df_cat['Chênh lệch'].sum())
+            c_val = df_cat['Tổng GT'].sum()
+            
+            c_kr = pd.to_numeric(df_cat['Kho_Rau'], errors='coerce').fillna(0)
+            c_st = pd.to_numeric(df_cat['BS_ST'], errors='coerce').fillna(0)
+            c_hh = pd.to_numeric(df_cat['Hao hụt'], errors='coerce').fillna(0)
+            
+            c_ret = int(c_kr.sum())
+            c_bs = int(c_st.sum())
+            c_lost = int(c_hh.sum())
+            c_proc = c_ret + c_bs + c_lost
+            c_rem = c_items - c_proc
+            
+            c_cxd = pd.to_numeric(df_cat['CXD'], errors='coerce').fillna(0)
+            c_xuly = df_cat['Xử lý'].astype(str).str.strip().str.lower()
+            c_pending = int(np.where(c_xuly == 'hoàn thành', c_cxd, 0).sum())
+            c_unprocessed = c_rem - c_pending
+            if c_unprocessed < 0: c_unprocessed = 0
+            
+            cause_ratio = c_ret / c_items if c_items > 0 else 0
+            
+            cat_summary[cat] = {
+                "items": c_items,
+                "value": c_val,
+                "processed": c_proc,
+                "return": c_ret,
+                "bs": c_bs,
+                "lost": c_lost,
+                "remaining": c_rem,
+                "pending": c_pending,
+                "unprocessed": c_unprocessed,
+                "cause_ratio": cause_ratio
+            }
+        return {
+            "date": date_str,
+            "total_items": total_items,
+            "total_value": total_value,
+            "processed": processed,
+            "return": returned,
+            "bs": created_bs,
+            "lost": lost,
+            "remaining": remaining,
+            "pending": pending,
+            "unprocessed": unprocessed,
+            "cat_summary": cat_summary
+        }
     # Thẻ thông tin (Metrics)
     st.write("---")
     col1, col2, col3 = st.columns(3)
@@ -666,7 +751,7 @@ with tab_main:
     if not tong_val_sku.empty: tong_val_sku['Ngày_str'] = 'Tổng'
     filtered_val_sku_renamed = create_multiindex_headers(filtered_val_sku, tong_val_sku)
 
-    tab5, tab6 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG (SKU)", "💰 Chi Tiết GIÁ TRỊ (SKU)"])
+    tab5, tab6, tab7 = st.tabs(["📊 Chi Tiết SỐ LƯỢNG (SKU)", "💰 Chi Tiết GIÁ TRỊ (SKU)", "📝 Nhận xét"])
 
     with tab5:
         display_df_with_download(filtered_qty_sku_renamed.style.format(format_vn).map(color_red_for_chenhlech, subset=[c for c in filtered_qty_sku_renamed.columns if 'Chênh lệch' in c[1] or 'Tỷ lệ (%)' in c[1]]), "Chi_Tiet_SL_SKU", height=600)
@@ -678,7 +763,9 @@ with tab_main:
     st.subheader("🏬 6. CHI TIẾT SỐ LƯỢNG & GIÁ TRỊ THEO SIÊU THỊ")
 
     selected_date = st.selectbox("🔍 Lọc theo Ngày:", dates)
-
+    # Compute daily summary for selected date
+    df_today = df_active if selected_date == "Tất cả các ngày" else df_active[df_active['Ngày_str'] == selected_date]
+    summary_today = compute_daily_summary(df_today, selected_date)
     st.write("### 📌 Đánh giá nhanh tình hình")
     if not pivot_qty.empty and not pivot_val_sum.empty:
         top_st_qty = pivot_qty.sort_values(by='Chênh lệch', ascending=False).iloc[0] if selected_date == "Tất cả các ngày" else pivot_qty[pivot_qty['Ngày_str'] == selected_date].sort_values(by='Chênh lệch', ascending=False).iloc[0] if not pivot_qty[pivot_qty['Ngày_str'] == selected_date].empty else None
@@ -1076,6 +1163,49 @@ with tab_daily:
     nx_b1 = generate_insights(df_filtered, "Bảng 1", df_b1)
     st.text_area("Nhận xét Bảng 1:", value=nx_b1, key="nx_b1", height=100)
     
+    # ---------------------- Đánh giá nhanh (Bảng 1) ----------------------
+    summary_daily = compute_daily_summary(df_filtered, selected_daily_date)
+    if summary_daily:
+        st.markdown(f"**BÁO CÁO CHÊNH LỆCH ĐỐI SOÁT NGÀY {summary_daily['date'] if summary_daily['date'] != 'Tất cả các ngày' else 'TỔNG HỢP'}**")
+        st.write(f"**Tổng: Lệch {summary_daily['total_items']} items (~{format_money(summary_daily['total_value'])} VNĐ).**")
+        st.write("")
+        st.write("**Kết quả xử lý:**")
+        pct_done = round(summary_daily['processed'] / summary_daily['total_items'] * 100) if summary_daily['total_items'] else 0
+        st.write(f"Đã xử lý: {summary_daily['processed']} items ({pct_done}%)")
+        st.write(f"- Trả về Kho rau {summary_daily['return']} items")
+        st.write(f"- Tạo bs ST {summary_daily['bs']} items")
+        st.write(f"- Hao hụt {summary_daily['lost']} items (KG).")
+        pct_remain = round(summary_daily['remaining'] / summary_daily['total_items'] * 100) if summary_daily['total_items'] else 0
+        st.write(f"Tồn lại: {summary_daily['remaining']} items ({pct_remain}%)")
+        st.write(f"(gồm {summary_daily['pending']} item đang xử lý + {summary_daily['unprocessed']} items chưa xử lý)")
+        st.markdown("________________________")
+        
+        # Chi tiết theo nhóm
+        for cat, data in summary_daily['cat_summary'].items():
+            if data['items'] == 0: continue
+            percent_value = (data['value'] / summary_daily['total_value'] * 100) if summary_daily['total_value'] else 0
+            
+            st.write(f"**{cat.upper()}**")
+            st.write(f"Chênh lệch: {data['items']} items (Giá trị: ~{format_money(data['value'])} VNĐ - chiếm {round(percent_value,1)}% tổng giá trị lệch).")
+            st.write(f"Đã xử lý: {data['processed']} items (Trả về Kho rau {data['return']} items, bs ST {data['bs']} items, Hao hụt {data['lost']} items).")
+            
+            rem_text = f"Còn tồn: "
+            if data['pending'] > 0 and data['unprocessed'] > 0:
+                rem_text += f"{data['pending']} items đang xử lý + {data['unprocessed']} items chưa xử lý"
+            elif data['pending'] > 0:
+                rem_text += f"{data['pending']} items đang xử lý"
+            elif data['unprocessed'] > 0:
+                rem_text += f"{data['unprocessed']} items chưa xử lý"
+            else:
+                rem_text += "0 items"
+            st.write(rem_text)
+            
+            cause_pct = round(data['cause_ratio'] * 100)
+            cause_val = data['value'] * data['cause_ratio']
+            st.write(f"Nguyên nhân lỗi chính: DC giao thiếu thực tế chiếm đến {cause_pct}% giá trị chênh lệch (tương đương ~{format_money(cause_val)} VNĐ).")
+            st.write("")
+    # ----------------------------------------------------------------
+    
     st.write("---")
     st.subheader("Bảng 1.1: Chi tiết đã xử lý")
     st.markdown("SL xử lý xác định qua các thông tin: Check camera, Hình ảnh ST, DC giao sai ST, DC pick sai...")
@@ -1175,26 +1305,3 @@ with tab_daily:
     nx_b4 = generate_insights(df_kg_hao_hut, "Bảng 4", df_top_hh)
     st.text_area("Nhận xét Bảng 4:", value=nx_b4, key="nx_b4", height=100)
 
-# ---------------------- Đánh giá nhanh (Bảng 1) ----------------------
-if summary_today:
-    st.write(f"Tổng: Lệch {summary_today['total_items']} items (~{format_vn(summary_today['total_value'])} VNĐ).")
-    st.write("**Kết quả xử lý:**")
-    pct_done = round(summary_today['processed'] / summary_today['total_items'] * 100) if summary_today['total_items'] else 0
-    st.write(f"- Đã xử lý: {summary_today['processed']} items ({pct_done}%)")
-    st.write(f"- Trả về Kho rau {summary_today['return']} items")
-    st.write(f"- Tạo bs ST {summary_today['bs']} items")
-    st.write(f"- Hao hụt {summary_today['lost']} items (KG).")
-    pct_remain = round(summary_today['remaining'] / summary_today['total_items'] * 100) if summary_today['total_items'] else 0
-    st.write(f"- Tồn lại: {summary_today['remaining']} items ({pct_remain}%)")
-    st.write("(gồm 5 item đang xử lý + 87 items chưa xử lý)")
-    st.write("---")
-    # Chi tiết theo nhóm
-    for cat, data in summary_today['cat_summary'].items():
-        percent_value = (data['value'] / summary_today['total_value'] * 100) if summary_today['total_value'] else 0
-        st.write(f"**{cat.upper()}**")
-        st.write(f"Chênh lệch: {data['items']} items (Giá trị: ~{format_vn(data['value'])} VNĐ - chiếm {round(percent_value,1)}% tổng giá trị lệch).")
-        st.write(f"Đã xử lý: {data['processed']} items (Trả về Kho rau {data['return']} items, bs ST {data['bs']} items, Hao hụt {data['lost']} items).")
-        st.write(f"Còn tồn: {data['remaining']} items chưa xử lý")
-        cause_pct = round(data['cause_ratio'] * 100, 1)
-        st.write(f"Nguyên nhân lỗi chính: DC giao thiếu thực tế chiếm đến {cause_pct}% giá trị chênh lệch (tương đương ~{format_vn(data['return'])} VNĐ).")
-# ----------------------------------------------------------------
