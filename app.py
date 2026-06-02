@@ -326,12 +326,14 @@ tab_main, tab_daily = st.tabs(["📊 Báo Cáo Tổng Quan", "📈 Báo Cáo Nă
 # TRANG 1: BÁO CÁO TỔNG QUAN (CODE CŨ)
 # ==========================================
 with tab_main:
-    month_filter_global = st.radio("🗓️ **CHỌN THÁNG BÁO CÁO:**", ["Tháng 4", "Tháng 5", "Cả 2 tháng (T4 & T5)"], index=1, horizontal=True)
+    month_filter_global = st.radio("🗓️ **CHỌN THÁNG BÁO CÁO:**", ["Tháng 4", "Tháng 5", "Tháng 6", "Tất cả các tháng"], index=2, horizontal=True)
 
     if month_filter_global == "Tháng 4":
         df_active = df_all[df_all['Ngày'].dt.month == 4].copy()
     elif month_filter_global == "Tháng 5":
         df_active = df_all[df_all['Ngày'].dt.month == 5].copy()
+    elif month_filter_global == "Tháng 6":
+        df_active = df_all[df_all['Ngày'].dt.month == 6].copy()
     else:
         df_active = df_all.copy()
 
