@@ -1012,7 +1012,9 @@ with tab_daily:
         data['Chênh lệch_clean'] = to_numeric(data['Chênh lệch'])
         
         data['CXD_HoanThanh'] = np.where(data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành', data['CXD'], 0)
-        data['CXD_DangXuLy'] = np.where(data['Xử lý'].astype(str).str.strip().str.lower() == 'đang xử lý', data['CXD'], 0)
+        # Sửa lại logic Chưa xử lý (chứa tất cả các case chưa hoàn thành, bao gồm cả rỗng)
+        data['CXD_DangXuLy'] = data['CXD'] - data['CXD_HoanThanh']
+        data['CXD_DangXuLy'] = np.where(data['CXD_DangXuLy'] < 0, 0, data['CXD_DangXuLy'])
         
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
         data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
