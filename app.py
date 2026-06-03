@@ -1321,13 +1321,14 @@ with tab_daily:
             sl_st_bo_qua = df_b12[df_b12['Giá trị lệch (VNĐ)'] < 100000]['ID ST'].nunique()
             
             if sl_dong_bo_qua > 0:
-                nx_b12 = (f"- Đề xuất đóng/bỏ qua xử lý cho {sl_st_bo_qua} siêu thị (tương đương {sl_dong_bo_qua} dòng chênh lệch) vì tổng giá trị chênh lệch ban đầu/ST < 100.000 VNĐ.\n"
+                nx_b12 = (f"- Đề xuất đóng/bỏ qua xử lý cho {sl_st_bo_qua} siêu thị (tương đương {sl_dong_bo_qua} PT chênh lệch) vì tổng giá trị chênh lệch ban đầu/ST < 100.000 VNĐ.\n"
+                          f"  (WRITE OFF - theo Quy trình xử lý khiếu nại hậu kiểm)\n"
                           f"- Tổng giá trị tiết kiệm và bỏ qua ước tính: {format_vn(tong_tien_bo_qua)} VNĐ.\n"
                           f"- Đánh giá hiệu quả: Việc không cần xử lý với các case trên là hoàn toàn hợp lý. Đặc biệt đối với các trường hợp hàng nhận = 0 => không có hình ảnh từ siêu thị. Để đối soát, SCM phải dò camera theo thời gian nhận hàng, mất rất nhiều thời gian cắt và xem lại cam. Việc này gây tốn kém nhân lực lớn nhưng giá trị lấy lại thì không cao, không mang lại hiệu quả kinh tế.")
             else:
                 nx_b12 = "- Tất cả các Siêu thị có hàng chưa xử lý đều có giá trị lớn hơn 100.000 VNĐ, cần tiếp tục đối soát và xử lý."
                 
-            st.text_area("Nhận xét Bảng 1.2:", value=nx_b12, key="nx_b1_2", height=130)
+            st.text_area("Nhận xét Bảng 1.2:", value=nx_b12, key="nx_b1_2", height=150)
         else:
             st.info("Tuyệt vời! Không có hàng Chưa xử lý (Đang treo) trong ngày báo cáo này.")
         
