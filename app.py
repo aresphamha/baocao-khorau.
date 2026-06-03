@@ -83,7 +83,7 @@ def load_data():
             try:
                 response = requests.get(url, timeout=30)
                 response.raise_for_status()
-                return pd.read_csv(io.StringIO(response.text), skiprows=2, dtype=str)
+                return pd.read_csv(io.BytesIO(response.content), skiprows=2, dtype=str)
             except Exception as e:
                 if i == max_retries - 1:
                     raise e
