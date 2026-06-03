@@ -1004,7 +1004,7 @@ with tab_daily:
         else:
             df_filtered = df_daily_all[df_daily_all['Ngày_str'] == selected_daily_date].copy()
     else:
-        st.warning("Không có dữ liệu đối soát từ ngày 01/05/2026.")
+        st.warning("Không có dữ liệu đối soát từ ngày 01/05/2026 trở đi.")
         df_filtered = pd.DataFrame()
     
     def calculate_daily_metrics(data, filter_type='all'):
@@ -1259,6 +1259,65 @@ with tab_daily:
     nx_b1_1 = generate_insights(df_note_data, "Bảng 1.1", df_note)
     st.text_area("Nhận xét Bảng 1.1:", value=nx_b1_1, key="nx_b1_1", height=100)
     
+    st.write("---")
+    st.subheader("Bảng 1.2: Đánh giá số lượng chưa xử lý (Áp dụng từ 27/05/2026)")
+    st.markdown("Đề xuất hướng xử lý dựa trên Giá trị chênh lệch (Dưới 100 ngàn VNĐ -> Bỏ qua).")
+    
+    # Chỉ tính dữ liệu từ ngày 27/05/2026 trở đi cho Bảng 1.2
+    df_cx = df_filtered[df_filtered['Ngày'] >= pd.to_datetime('2026-05-27')].copy()
+    
+    if df_cx.empty:
+        st.info("Bảng 1.2 chỉ áp dụng cho dữ liệu từ ngày 27/05/2026 trở đi. Hãy chọn ngày phù hợp để xem.")
+    else:
+        df_cx['CXD_HoanThanh'] = np.where(df_cx['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành', to_numeric(df_cx['CXD']), 0)
+        df_cx['CXD_DangXuLy'] = to_numeric(df_cx['CXD']) - df_cx['CXD_HoanThanh']
+        df_cx['CXD_DangXuLy'] = np.where(df_cx['CXD_DangXuLy'] < 0, 0, df_cx['CXD_DangXuLy'])
+        
+        df_cxd_only = df_cx[df_cx['CXD_DangXuLy'] > 0]
+        
+        if not df_cxd_only.empty:
+            df_b12 = df_cxd_only.groupby(['CLV2', 'ID ST', 'Chi nhánh nhận']).agg(
+                SL_chuyen=('Số lượng chuyển', lambda x: to_numeric(x).sum()),
+                SL_chenh_lech=('Chênh lệch', lambda x: to_numeric(x).sum()),
+                SL_chua_xu_ly=('CXD_DangXuLy', 'sum'),
+                Gia_tri_lech=('Tổng GT', lambda x: to_numeric(x).sum())
+            ).reset_index()
+            
+            df_b12.rename(columns={
+                'CLV2': 'Ngành hàng',
+                'SL_chuyen': 'SL Chuyển',
+                'SL_chenh_lech': 'SL Chênh lệch',
+                'SL_chua_xu_ly': 'Số lượng chưa xử lý',
+                'Gia_tri_lech': 'Giá trị lệch (VNĐ)'
+            }, inplace=True)
+            
+            def de_xuat_he_thong(val):
+                if val < 100000:
+                    return '🟢 Bỏ qua không xử lý'
+                else:
+                    return '🔴 Phải xử lý'
+                    
+            df_b12['Đề xuất hệ thống'] = df_b12['Giá trị lệch (VNĐ)'].apply(de_xuat_he_thong)
+            df_b12 = df_b12.sort_values(by='Giá trị lệch (VNĐ)', ascending=False)
+            
+            format_custom_table_with_total(df_b12, 'Ngành hàng', "Bang_1_2")
+            
+            tong_tien_bo_qua = df_b12[df_b12['Giá trị lệch (VNĐ)'] < 100000]['Giá trị lệch (VNĐ)'].sum()
+            sl_dong_bo_qua = len(df_b12[df_b12['Giá trị lệch (VNĐ)'] < 100000])
+            sl_st_bo_qua = df_b12[df_b12['Giá trị lệch (VNĐ)'] < 100000]['ID ST'].nunique()
+            
+            if sl_dong_bo_qua > 0:
+                nx_b12 = (f"- Đề xuất đóng/bỏ qua xử lý cho {sl_st_bo_qua} siêu thị (tương đương {sl_dong_bo_qua} dòng chênh lệch) vì tổng giá trị chênh lệch ban đầu/ST < 100.000 VNĐ.\n"
+                          f"- Tổng giá trị tiết kiệm và bỏ qua ước tính: {format_vn(tong_tien_bo_qua)} VNĐ.\n"
+                          f"- Đánh giá hiệu quả: Việc không cần xử lý với các case trên là hoàn toàn hợp lý. Đặc biệt đối với các trường hợp hàng nhận = 0 => không có hình ảnh từ siêu thị. Để đối soát, SCM phải dò camera theo thời gian nhận hàng, mất rất nhiều thời gian cắt và xem lại cam. Việc này gây tốn kém nhân lực lớn nhưng giá trị lấy lại thì không cao, không mang lại hiệu quả kinh tế.")
+            else:
+                nx_b12 = "- Tất cả các Siêu thị có hàng chưa xử lý đều có giá trị lớn hơn 100.000 VNĐ, cần tiếp tục đối soát và xử lý."
+                
+            st.text_area("Nhận xét Bảng 1.2:", value=nx_b12, key="nx_b1_2", height=130)
+        else:
+            st.info("Tuyệt vời! Không có hàng Chưa xử lý (Đang treo) trong ngày báo cáo này.")
+        
+    st.write("---")
     st.subheader("Bảng 2: Đánh giá tình hình xử lý hàng theo ĐVT: KG")
     df_kg = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'KG'].copy()
     
