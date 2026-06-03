@@ -1291,6 +1291,7 @@ with tab_daily:
         
         if not df_cxd_only.empty:
             df_b12 = df_cxd_only.groupby(['CLV2', 'ID ST', 'Chi nhánh nhận']).agg(
+                SL_ma=('Mã hàng', 'nunique'),
                 SL_chuyen=('Số lượng chuyển', lambda x: to_numeric(x).sum()),
                 SL_chenh_lech=('Chênh lệch', lambda x: to_numeric(x).sum()),
                 SL_chua_xu_ly=('CXD_DangXuLy', 'sum'),
@@ -1299,6 +1300,7 @@ with tab_daily:
             
             df_b12.rename(columns={
                 'CLV2': 'Ngành hàng',
+                'SL_ma': 'SL Mã',
                 'SL_chuyen': 'SL Chuyển',
                 'SL_chenh_lech': 'SL Chênh lệch',
                 'SL_chua_xu_ly': 'Số lượng chưa xử lý',
