@@ -1120,6 +1120,30 @@ with tab_daily:
                     tong_df[col] = str(round((sum_hh / sum_ch) * 100, 2)) + '%'
                 else:
                     tong_df[col] = '0.0%'
+            elif col == '% Lỗi ST / Chuyển':
+                s_ch = df['SL chuyển'].sum()
+                s_st = df['SL bs ST'].sum()
+                tong_df[col] = str(round((s_st / s_ch * 100), 2)) + '%' if s_ch > 0 else '0%'
+            elif col == '% Lỗi ST / Lệch':
+                s_cl = df['SL chênh lệch'].sum()
+                s_st = df['SL bs ST'].sum()
+                tong_df[col] = str(round((s_st / s_cl * 100), 2)) + '%' if s_cl > 0 else '0%'
+            elif col == '% Hao hụt / Chuyển':
+                s_ch = df['SL chuyển'].sum()
+                s_hh = df['Số lượng hao hụt'].sum()
+                tong_df[col] = str(round((s_hh / s_ch * 100), 2)) + '%' if s_ch > 0 else '0%'
+            elif col == '% Hao hụt / Lệch':
+                s_cl = df['SL chênh lệch'].sum()
+                s_hh = df['Số lượng hao hụt'].sum()
+                tong_df[col] = str(round((s_hh / s_cl * 100), 2)) + '%' if s_cl > 0 else '0%'
+            elif col == '% Trả KR (Lỗi GT) / Chuyển':
+                s_ch = df['SL chuyển'].sum()
+                s_kr = df['SL bs kho rau'].sum()
+                tong_df[col] = str(round((s_kr / s_ch * 100), 2)) + '%' if s_ch > 0 else '0%'
+            elif col == '% Trả KR (Lỗi GT) / Lệch':
+                s_cl = df['SL chênh lệch'].sum()
+                s_kr = df['SL bs kho rau'].sum()
+                tong_df[col] = str(round((s_kr / s_cl * 100), 2)) + '%' if s_cl > 0 else '0%'
             elif pd.api.types.is_numeric_dtype(df[col]):
                 tong_df[col] = df[col].sum()
             else:
@@ -1136,7 +1160,7 @@ with tab_daily:
             else:
                 total_str = '⭐ TỔNG' if col == group_by_col else ''
                 
-            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)']:
+            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)', '% Lỗi ST / Chuyển', '% Lỗi ST / Lệch', '% Hao hụt / Chuyển', '% Hao hụt / Lệch', '% Trả KR (Lỗi GT) / Chuyển', '% Trả KR (Lỗi GT) / Lệch']:
                 cat = 'Đã xử lý'
                 col_name = col
             else:
@@ -1348,7 +1372,24 @@ with tab_daily:
     # Customize for business logic
     df_b21_new['Hao hụt (<=10%)'] = df_b21_new['Số lượng hao hụt']
     df_b21_new['Trả KR (Lỗi giao thiếu)'] = df_b21_new['SL bs kho rau']
-    cols2_1 = ['CLV4', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'SL bs ST', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)', 'Tỷ lệ hao hụt', 'Đang xử lý', 'Chưa xử lý']
+    
+    df_b21_new['% Lỗi ST / Chuyển'] = np.where(df_b21_new['SL chuyển'] > 0, (df_b21_new['SL bs ST'] / df_b21_new['SL chuyển'] * 100).round(2).astype(str) + '%', '0%')
+    df_b21_new['% Lỗi ST / Lệch'] = np.where(df_b21_new['SL chênh lệch'] > 0, (df_b21_new['SL bs ST'] / df_b21_new['SL chênh lệch'] * 100).round(2).astype(str) + '%', '0%')
+
+    df_b21_new['% Hao hụt / Chuyển'] = np.where(df_b21_new['SL chuyển'] > 0, (df_b21_new['Số lượng hao hụt'] / df_b21_new['SL chuyển'] * 100).round(2).astype(str) + '%', '0%')
+    df_b21_new['% Hao hụt / Lệch'] = np.where(df_b21_new['SL chênh lệch'] > 0, (df_b21_new['Số lượng hao hụt'] / df_b21_new['SL chênh lệch'] * 100).round(2).astype(str) + '%', '0%')
+
+    df_b21_new['% Trả KR (Lỗi GT) / Chuyển'] = np.where(df_b21_new['SL chuyển'] > 0, (df_b21_new['SL bs kho rau'] / df_b21_new['SL chuyển'] * 100).round(2).astype(str) + '%', '0%')
+    df_b21_new['% Trả KR (Lỗi GT) / Lệch'] = np.where(df_b21_new['SL chênh lệch'] > 0, (df_b21_new['SL bs kho rau'] / df_b21_new['SL chênh lệch'] * 100).round(2).astype(str) + '%', '0%')
+
+    cols2_1 = [
+        'CLV4', 'SL chuyển', 'SL chênh lệch', 
+        'SL bs ST', '% Lỗi ST / Chuyển', '% Lỗi ST / Lệch',
+        'Tổng Trả Kho Rau', 
+        'Hao hụt (<=10%)', '% Hao hụt / Chuyển', '% Hao hụt / Lệch',
+        'Trả KR (Lỗi giao thiếu)', '% Trả KR (Lỗi GT) / Chuyển', '% Trả KR (Lỗi GT) / Lệch',
+        'Đang xử lý', 'Chưa xử lý'
+    ]
     
     display_daily_table(df_b21_new, cols2_1, "Bang_2_1_CLV4", group_by_col='CLV4')
     nx_b21_new = generate_insights(df_kg_nhan, "Bảng 2.1", df_b21_new)
