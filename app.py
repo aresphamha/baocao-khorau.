@@ -116,6 +116,7 @@ def load_data():
     df['LyDo_W'] = df['Hao hụt'].astype(str).str.strip().str.lower()
     df['LyDo_X'] = df['Siêu thị'].astype(str).str.strip().str.lower()
     df['LyDo_Y'] = df['Kho rau\nChưa xác định'].astype(str).str.strip().str.lower()
+    df['LyDo_Loi'] = df['Lỗi'].astype(str).str.strip().str.lower() if 'Lỗi' in df.columns else ''
     
     df['Qty_N'] = df['Hạo hụt tự nhiên'].apply(clean_number)
     
@@ -127,8 +128,8 @@ def load_data():
     
     df['Hao hụt'] = np.where(df['LyDo_W'].str.contains('hao hụt'), df['Qty_N'], 0)
     df['BS_ST'] = np.where(df['LyDo_X'].str.contains('siêu thị'), df['Qty_O'], 0)
-    df['ST_NhapThieu'] = np.where(df['LyDo_X'].str.contains('siêu thị') & df['LyDo_X'].str.contains('thiếu'), df['Qty_O'], 0)
-    df['ST_SaiQT'] = np.where(df['LyDo_X'].str.contains('siêu thị') & ~df['LyDo_X'].str.contains('thiếu'), df['Qty_O'], 0)
+    df['ST_NhapThieu'] = np.where(df['LyDo_X'].str.contains('siêu thị') & df['LyDo_Loi'].str.contains('thiếu'), df['Qty_O'], 0)
+    df['ST_SaiQT'] = np.where(df['LyDo_X'].str.contains('siêu thị') & ~df['LyDo_Loi'].str.contains('thiếu'), df['Qty_O'], 0)
     df['Kho_Rau'] = np.where(df['LyDo_Y'].str.contains('kho rau'), df['Qty_P'], 0)
     df['CXD'] = np.where(df['LyDo_Y'].str.contains('chưa xác định'), df['Qty_P'], 0)
             
