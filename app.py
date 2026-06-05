@@ -1161,8 +1161,11 @@ with tab_daily:
             else:
                 total_str = '⭐ TỔNG' if col == group_by_col else ''
                 
-            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)', '% Lỗi ST / Chuyển', '% Lỗi ST / Lệch', '% Hao hụt / Chuyển', '% Hao hụt / Lệch', '% Trả KR (Lỗi GT) / Chuyển', '% Trả KR (Lỗi GT) / Lệch']:
+            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt']:
                 cat = 'Đã xử lý'
+                col_name = col
+            elif col in ['<= 5%', '5-10%', '10-15%', '> 15%']:
+                cat = 'Phân bổ Chênh lệch (Số lượng)'
                 col_name = col
             else:
                 cat = ''
@@ -1366,61 +1369,77 @@ with tab_daily:
     st.subheader("Bảng 2: Đánh giá tình hình xử lý hàng theo ĐVT: KG")
     df_kg = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'KG'].copy()
     
-    st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Nhóm Hàng CLV4)**")
-    df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
-    df_b21_new = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan', group_by_col='CLV4')
+    st.markdown("**2.1 Đánh giá mức độ nghiêm trọng chênh lệch (Hàng KG Nhận > 0 - Theo CLV4)**")
+    df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0].copy()
     
-    # Customize for business logic
-    df_b21_new['Hao hụt (<=10%)'] = df_b21_new['Số lượng hao hụt']
-    df_b21_new['Trả KR (Lỗi giao thiếu)'] = df_b21_new['SL bs kho rau']
+    # Tính tỷ lệ lệch từng dòng
+    df_kg_nhan['Chênh lệch_clean'] = to_numeric(df_kg_nhan['Chênh lệch'])
+    df_kg_nhan['Số lượng chuyển_clean'] = to_numeric(df_kg_nhan['Số lượng chuyển'])
     
-    df_b21_new['% Lỗi ST / Chuyển'] = np.where(df_b21_new['SL chuyển'] > 0, (df_b21_new['SL bs ST'] / df_b21_new['SL chuyển'] * 100).round(2).astype(str) + '%', '0%')
-    df_b21_new['% Lỗi ST / Lệch'] = np.where(df_b21_new['SL chênh lệch'] > 0, (df_b21_new['SL bs ST'] / df_b21_new['SL chênh lệch'] * 100).round(2).astype(str) + '%', '0%')
-
-    df_b21_new['% Hao hụt / Chuyển'] = np.where(df_b21_new['SL chuyển'] > 0, (df_b21_new['Số lượng hao hụt'] / df_b21_new['SL chuyển'] * 100).round(2).astype(str) + '%', '0%')
-    df_b21_new['% Hao hụt / Lệch'] = np.where(df_b21_new['SL chênh lệch'] > 0, (df_b21_new['Số lượng hao hụt'] / df_b21_new['SL chênh lệch'] * 100).round(2).astype(str) + '%', '0%')
-
-    df_b21_new['% Trả KR (Lỗi GT) / Chuyển'] = np.where(df_b21_new['SL chuyển'] > 0, (df_b21_new['SL bs kho rau'] / df_b21_new['SL chuyển'] * 100).round(2).astype(str) + '%', '0%')
-    df_b21_new['% Trả KR (Lỗi GT) / Lệch'] = np.where(df_b21_new['SL chênh lệch'] > 0, (df_b21_new['SL bs kho rau'] / df_b21_new['SL chênh lệch'] * 100).round(2).astype(str) + '%', '0%')
-
-    cols2_1 = [
-        'CLV4', 'SL chuyển', 'SL chênh lệch', 
-        'SL bs ST', '% Lỗi ST / Chuyển', '% Lỗi ST / Lệch',
-        'Tổng Trả Kho Rau', 
-        'Hao hụt (<=10%)', '% Hao hụt / Chuyển', '% Hao hụt / Lệch',
-        'Trả KR (Lỗi giao thiếu)', '% Trả KR (Lỗi GT) / Chuyển', '% Trả KR (Lỗi GT) / Lệch',
-        'Đang xử lý', 'Chưa xử lý'
+    df_kg_nhan['Tỷ lệ % lệch'] = np.where(
+        df_kg_nhan['Số lượng chuyển_clean'] > 0, 
+        (df_kg_nhan['Chênh lệch_clean'] / df_kg_nhan['Số lượng chuyển_clean']) * 100, 
+        100
+    )
+    
+    # Phân loại dòng
+    conditions = [
+        (df_kg_nhan['Tỷ lệ % lệch'] == 0),
+        (df_kg_nhan['Tỷ lệ % lệch'] > 0) & (df_kg_nhan['Tỷ lệ % lệch'] <= 5),
+        (df_kg_nhan['Tỷ lệ % lệch'] > 5) & (df_kg_nhan['Tỷ lệ % lệch'] <= 10),
+        (df_kg_nhan['Tỷ lệ % lệch'] > 10) & (df_kg_nhan['Tỷ lệ % lệch'] <= 15),
+        (df_kg_nhan['Tỷ lệ % lệch'] > 15)
     ]
+    choices = ['0%', '<= 5%', '5-10%', '10-15%', '> 15%']
+    df_kg_nhan['Nhóm lệch'] = np.select(conditions, choices, default='> 15%')
+    
+    # Tính tổng chuyển và lệch theo CLV4
+    b21_base = df_kg_nhan.groupby('CLV4').agg(
+        SL_chuyen=('Số lượng chuyển_clean', 'sum'),
+        SL_chenh_lech=('Chênh lệch_clean', 'sum')
+    ).reset_index()
+    
+    # Tính TỔNG SỐ LƯỢNG LỆCH rơi vào từng nhóm %
+    pivot_bucket = df_kg_nhan[df_kg_nhan['Nhóm lệch'] != '0%'].pivot_table(
+        index='CLV4', 
+        columns='Nhóm lệch', 
+        values='Chênh lệch_clean', 
+        aggfunc='sum', 
+        fill_value=0
+    ).reset_index()
+    
+    # Merge
+    df_b21_new = pd.merge(b21_base, pivot_bucket, on='CLV4', how='left').fillna(0)
+    
+    # Đếm tình trạng xử lý (lọc lại Đang xử lý/Chưa xử lý đúng chuẩn mới nhất)
+    trang_thai = df_kg_nhan['Trạng thái'].astype(str).str.strip().str.lower()
+    df_kg_nhan['CXD_DangXuLy'] = np.where(trang_thai == 'đang xử lý', to_numeric(df_kg_nhan['CXD']), 0)
+    df_kg_nhan['CXD_ChuaXuLy'] = np.where(trang_thai != 'đang xử lý', to_numeric(df_kg_nhan['CXD']), 0)
+    
+    status_grouped = df_kg_nhan.groupby('CLV4').agg(
+        Đang_xử_lý=('CXD_DangXuLy', 'sum'),
+        Chưa_xử_lý=('CXD_ChuaXuLy', 'sum')
+    ).reset_index()
+    
+    df_b21_new = pd.merge(df_b21_new, status_grouped, on='CLV4', how='left').fillna(0)
+    
+    df_b21_new.rename(columns={
+        'SL_chuyen': 'SL chuyển',
+        'SL_chenh_lech': 'SL chênh lệch',
+        'Đang_xử_lý': 'Đang xử lý',
+        'Chưa_xử_lý': 'Chưa xử lý'
+    }, inplace=True)
+    
+    # Đảm bảo đủ cột
+    for c in ['<= 5%', '5-10%', '10-15%', '> 15%']:
+        if c not in df_b21_new.columns:
+            df_b21_new[c] = 0
+            
+    cols2_1 = ['CLV4', 'SL chuyển', 'SL chênh lệch', '<= 5%', '5-10%', '10-15%', '> 15%', 'Đang xử lý', 'Chưa xử lý']
     
     display_daily_table(df_b21_new, cols2_1, "Bang_2_1_CLV4", group_by_col='CLV4')
-    nx_b21_new = generate_insights(df_kg_nhan, "Bảng 2.1", df_b21_new)
-    st.text_area("Nhận xét Bảng 2.1:", value=nx_b21_new, key="nx_b21_new", height=120)
-
-    st.markdown("**2.1B Phân bổ mức độ nghiêm trọng của chênh lệch (Tính theo Số lượng PT/Dòng)**")
-    df_bucket = df_kg_nhan[to_numeric(df_kg_nhan['Chênh lệch']) > 0].copy()
-    df_bucket['Tỷ lệ % lệch'] = np.where(to_numeric(df_bucket['Số lượng chuyển']) > 0, (to_numeric(df_bucket['Chênh lệch']) / to_numeric(df_bucket['Số lượng chuyển'])) * 100, 100)
     
-    conditions = [
-        (df_bucket['Tỷ lệ % lệch'] <= 5),
-        (df_bucket['Tỷ lệ % lệch'] > 5) & (df_bucket['Tỷ lệ % lệch'] <= 10),
-        (df_bucket['Tỷ lệ % lệch'] > 10) & (df_bucket['Tỷ lệ % lệch'] <= 15),
-        (df_bucket['Tỷ lệ % lệch'] > 15)
-    ]
-    choices = ['1. <= 5% (Bình thường)', '2. 5-10% (Cảnh báo)', '3. 10-15% (Bất thường)', '4. > 15% (Nghiêm trọng)']
-    df_bucket['Phân loại lệch'] = np.select(conditions, choices, default='Khác')
-    
-    if not df_bucket.empty:
-        bucket_grouped = df_bucket.groupby(['CLV4', 'Phân loại lệch']).size().unstack(fill_value=0).reset_index()
-        for choice in choices:
-            if choice not in bucket_grouped.columns:
-                bucket_grouped[choice] = 0
-        bucket_grouped['Tổng số PT lệch'] = bucket_grouped[choices].sum(axis=1)
-        bucket_grouped = bucket_grouped[['CLV4'] + choices + ['Tổng số PT lệch']].sort_values(by='Tổng số PT lệch', ascending=False)
-        format_custom_table_with_total(bucket_grouped, 'CLV4', "Bang_2_1_Bucket")
-        
-        st.info("💡 **Gợi ý Action:** Các dòng rơi vào nhóm 'Bình thường (<=5%)' có thể cấu hình Auto-Approve (Write-off) vì đây là hao hụt tự nhiên. Các nhóm từ 'Bất thường' đến 'Nghiêm trọng' (>10%) cần được SCM/DC tra soát lại khâu nhặt hàng (picking) hoặc yêu cầu ST cung cấp hình ảnh chứng minh để quy trách nhiệm đền bù rõ ràng.")
-    else:
-        st.info("Không có dữ liệu chênh lệch cho Hàng KG trong kỳ này.")
+    st.info("💡 **Gợi ý Action:** Các khoản lệch rơi vào mức `<= 5%` là hao hụt tự nhiên, có thể xem xét bỏ qua. Các mức từ `> 10%` là do lỗi chủ quan (kho nhặt thiếu, ST nhập sai), yêu cầu check lại quy trình.")
 
     st.markdown("**2.2 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Ngành Hàng CLV2)**")
     df_b22_old = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
