@@ -127,6 +127,8 @@ def load_data():
     
     df['Hao hụt'] = np.where(df['LyDo_W'].str.contains('hao hụt'), df['Qty_N'], 0)
     df['BS_ST'] = np.where(df['LyDo_X'].str.contains('siêu thị'), df['Qty_O'], 0)
+    df['ST_NhapThieu'] = np.where(df['LyDo_X'].str.contains('siêu thị') & df['LyDo_X'].str.contains('thiếu'), df['Qty_O'], 0)
+    df['ST_SaiQT'] = np.where(df['LyDo_X'].str.contains('siêu thị') & ~df['LyDo_X'].str.contains('thiếu'), df['Qty_O'], 0)
     df['Kho_Rau'] = np.where(df['LyDo_Y'].str.contains('kho rau'), df['Qty_P'], 0)
     df['CXD'] = np.where(df['LyDo_Y'].str.contains('chưa xác định'), df['Qty_P'], 0)
             
@@ -1045,6 +1047,8 @@ with tab_daily:
             Số_lượng_line_đã_xử_lý=('Is_Da_Xu_Ly', 'sum'),
             Số_lượng_hao_hụt=('Hao hụt', 'sum'),
             Số_lượng_bs_ST=('BS_ST', 'sum'),
+            ST_nhap_thieu=('ST_NhapThieu', 'sum'),
+            ST_sai_QT=('ST_SaiQT', 'sum'),
             SL_bs_kho_rau=('Kho_Rau', 'sum'),
             Số_lượng_đang_xử_lý=('CXD_DangXuLy', 'sum'),
             Số_lượng_chưa_xác_định=('CXD_ChuaXuLy', 'sum')
@@ -1089,6 +1093,8 @@ with tab_daily:
             'Số_lượng_line_đã_xử_lý': 'SL line đã xử lý',
             'Số_lượng_hao_hụt': 'Số lượng hao hụt',
             'Số_lượng_bs_ST': 'SL bs ST',
+            'ST_nhap_thieu': 'Lỗi ST (Nhập thiếu)',
+            'ST_sai_QT': 'Lỗi ST (Sai QT)',
             'SL_bs_kho_rau': 'SL bs kho rau',
             'Số_lượng_đang_xử_lý': 'Đang xử lý',
             'Số_lượng_chưa_xác_định': 'Chưa xử lý'
@@ -1161,7 +1167,7 @@ with tab_daily:
             else:
                 total_str = '⭐ TỔNG' if col == group_by_col else ''
                 
-            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)']:
+            if col in ['Số lượng hao hụt', 'SL bs ST', 'Lỗi ST (Nhập thiếu)', 'Lỗi ST (Sai QT)', 'SL bs kho rau', 'Tỷ lệ hao hụt', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)']:
                 cat = 'Đã xử lý'
                 col_name = col
             elif col in ['<= 5%', '5-10%', '10-15%', '> 15%']:
@@ -1378,13 +1384,15 @@ with tab_daily:
     df_b21_new['Trả KR (Lỗi giao thiếu)'] = df_b21_new['SL bs kho rau']
     df_b21_new['Tổng Trả Kho Rau'] = df_b21_new['Hao hụt (<=10%)'] + df_b21_new['Trả KR (Lỗi giao thiếu)']
     
-    # Tính tỷ lệ lệch từng dòng cho Phân bổ Chênh lệch
-    df_kg_nhan['Chênh lệch_clean'] = to_numeric(df_kg_nhan['Chênh lệch'])
+    # Tính tỷ lệ lệch từng dòng cho Phân bổ Chênh lệch (chỉ dựa vào phần Trả Kho Rau)
     df_kg_nhan['Số lượng chuyển_clean'] = to_numeric(df_kg_nhan['Số lượng chuyển'])
+    
+    # Số lượng thực sự mà Kho Rau phải chịu trách nhiệm (Hao hụt + Lỗi Giao Thiếu)
+    df_kg_nhan['Row_Tong_Tra_KR'] = to_numeric(df_kg_nhan['Hao hụt']) + to_numeric(df_kg_nhan['Kho_Rau'])
     
     df_kg_nhan['Tỷ lệ % lệch'] = np.where(
         df_kg_nhan['Số lượng chuyển_clean'] > 0, 
-        (df_kg_nhan['Chênh lệch_clean'] / df_kg_nhan['Số lượng chuyển_clean']) * 100, 
+        (df_kg_nhan['Row_Tong_Tra_KR'] / df_kg_nhan['Số lượng chuyển_clean']) * 100, 
         100
     )
     
@@ -1399,11 +1407,11 @@ with tab_daily:
     choices = ['0%', '<= 5%', '5-10%', '10-15%', '> 15%']
     df_kg_nhan['Nhóm lệch'] = np.select(conditions, choices, default='> 15%')
     
-    # Tính TỔNG SỐ LƯỢNG LỆCH rơi vào từng nhóm %
+    # Tính TỔNG SỐ LƯỢNG LỆCH (Phần Kho Rau) rơi vào từng nhóm %
     pivot_bucket = df_kg_nhan[df_kg_nhan['Nhóm lệch'] != '0%'].pivot_table(
         index='CLV4', 
         columns='Nhóm lệch', 
-        values='Chênh lệch_clean', 
+        values='Row_Tong_Tra_KR', 
         aggfunc='sum', 
         fill_value=0
     ).reset_index()
@@ -1418,7 +1426,8 @@ with tab_daily:
             
     cols2_1 = [
         'CLV4', 'SL chuyển', 'SL chênh lệch', 
-        'SL bs ST', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)',
+        'SL bs ST', 'Lỗi ST (Nhập thiếu)', 'Lỗi ST (Sai QT)', 
+        'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)',
         '<= 5%', '5-10%', '10-15%', '> 15%', 
         'Đang xử lý', 'Chưa xử lý'
     ]
