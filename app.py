@@ -1161,7 +1161,7 @@ with tab_daily:
             else:
                 total_str = '⭐ TỔNG' if col == group_by_col else ''
                 
-            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt']:
+            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)']:
                 cat = 'Đã xử lý'
                 col_name = col
             elif col in ['<= 5%', '5-10%', '10-15%', '> 15%']:
@@ -1372,7 +1372,13 @@ with tab_daily:
     st.markdown("**2.1 Đánh giá mức độ nghiêm trọng chênh lệch (Hàng KG Nhận > 0 - Theo CLV4)**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0].copy()
     
-    # Tính tỷ lệ lệch từng dòng
+    # Lấy lại các cột xử lý (Hao hụt, Lỗi ST, Trả KR)
+    df_b21_new = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan', group_by_col='CLV4')
+    df_b21_new['Hao hụt (<=10%)'] = df_b21_new['Số lượng hao hụt']
+    df_b21_new['Trả KR (Lỗi giao thiếu)'] = df_b21_new['SL bs kho rau']
+    df_b21_new['Tổng Trả Kho Rau'] = df_b21_new['Hao hụt (<=10%)'] + df_b21_new['Trả KR (Lỗi giao thiếu)']
+    
+    # Tính tỷ lệ lệch từng dòng cho Phân bổ Chênh lệch
     df_kg_nhan['Chênh lệch_clean'] = to_numeric(df_kg_nhan['Chênh lệch'])
     df_kg_nhan['Số lượng chuyển_clean'] = to_numeric(df_kg_nhan['Số lượng chuyển'])
     
@@ -1393,12 +1399,6 @@ with tab_daily:
     choices = ['0%', '<= 5%', '5-10%', '10-15%', '> 15%']
     df_kg_nhan['Nhóm lệch'] = np.select(conditions, choices, default='> 15%')
     
-    # Tính tổng chuyển và lệch theo CLV4
-    b21_base = df_kg_nhan.groupby('CLV4').agg(
-        SL_chuyen=('Số lượng chuyển_clean', 'sum'),
-        SL_chenh_lech=('Chênh lệch_clean', 'sum')
-    ).reset_index()
-    
     # Tính TỔNG SỐ LƯỢNG LỆCH rơi vào từng nhóm %
     pivot_bucket = df_kg_nhan[df_kg_nhan['Nhóm lệch'] != '0%'].pivot_table(
         index='CLV4', 
@@ -1408,34 +1408,20 @@ with tab_daily:
         fill_value=0
     ).reset_index()
     
-    # Merge
-    df_b21_new = pd.merge(b21_base, pivot_bucket, on='CLV4', how='left').fillna(0)
-    
-    # Đếm tình trạng xử lý (lọc lại Đang xử lý/Chưa xử lý đúng chuẩn mới nhất)
-    trang_thai = df_kg_nhan['Trạng thái'].astype(str).str.strip().str.lower()
-    df_kg_nhan['CXD_DangXuLy'] = np.where(trang_thai == 'đang xử lý', to_numeric(df_kg_nhan['CXD']), 0)
-    df_kg_nhan['CXD_ChuaXuLy'] = np.where(trang_thai != 'đang xử lý', to_numeric(df_kg_nhan['CXD']), 0)
-    
-    status_grouped = df_kg_nhan.groupby('CLV4').agg(
-        Đang_xử_lý=('CXD_DangXuLy', 'sum'),
-        Chưa_xử_lý=('CXD_ChuaXuLy', 'sum')
-    ).reset_index()
-    
-    df_b21_new = pd.merge(df_b21_new, status_grouped, on='CLV4', how='left').fillna(0)
-    
-    df_b21_new.rename(columns={
-        'SL_chuyen': 'SL chuyển',
-        'SL_chenh_lech': 'SL chênh lệch',
-        'Đang_xử_lý': 'Đang xử lý',
-        'Chưa_xử_lý': 'Chưa xử lý'
-    }, inplace=True)
+    # Merge buckets vào df_b21_new
+    df_b21_new = pd.merge(df_b21_new, pivot_bucket, on='CLV4', how='left').fillna(0)
     
     # Đảm bảo đủ cột
     for c in ['<= 5%', '5-10%', '10-15%', '> 15%']:
         if c not in df_b21_new.columns:
             df_b21_new[c] = 0
             
-    cols2_1 = ['CLV4', 'SL chuyển', 'SL chênh lệch', '<= 5%', '5-10%', '10-15%', '> 15%', 'Đang xử lý', 'Chưa xử lý']
+    cols2_1 = [
+        'CLV4', 'SL chuyển', 'SL chênh lệch', 
+        'SL bs ST', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)',
+        '<= 5%', '5-10%', '10-15%', '> 15%', 
+        'Đang xử lý', 'Chưa xử lý'
+    ]
     
     display_daily_table(df_b21_new, cols2_1, "Bang_2_1_CLV4", group_by_col='CLV4')
     
