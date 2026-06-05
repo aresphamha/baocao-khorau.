@@ -1093,6 +1093,8 @@ with tab_daily:
             'Số_lượng_chưa_xác_định': 'Chưa xử lý'
         })
         
+        grouped['Tổng Trả Kho Rau'] = grouped['Số lượng hao hụt'] + grouped['SL bs kho rau']
+        
         return grouped
 
     def display_daily_table(df, cols, title_prefix, group_by_col='CLV2'):
@@ -1105,9 +1107,10 @@ with tab_daily:
                 tong_df[col] = 'Tổng'
             elif col == 'Tỷ lệ line đã xử lý':
                 sum_line_xl = df['SL line đã xử lý'].sum()
+                sum_line_hh = df['SL line hao hụt'].sum()
                 sum_line_cl = df['SL line chênh lệch'].sum()
                 if sum_line_cl > 0:
-                    tong_df[col] = str(round((sum_line_xl / sum_line_cl) * 100, 2)) + '%'
+                    tong_df[col] = str(round(((sum_line_xl + sum_line_hh) / sum_line_cl) * 100, 2)) + '%'
                 else:
                     tong_df[col] = '0.0%'
             elif col == 'Tỷ lệ hao hụt':
@@ -1133,7 +1136,7 @@ with tab_daily:
             else:
                 total_str = '⭐ TỔNG' if col == group_by_col else ''
                 
-            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt']:
+            if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)']:
                 cat = 'Đã xử lý'
                 col_name = col
             else:
@@ -1341,7 +1344,12 @@ with tab_daily:
     st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Nhóm Hàng CLV4)**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
     df_b21_new = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan', group_by_col='CLV4')
-    cols2_1 = ['CLV4', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    
+    # Customize for business logic
+    df_b21_new['Hao hụt (<=10%)'] = df_b21_new['Số lượng hao hụt']
+    df_b21_new['Trả KR (Lỗi giao thiếu)'] = df_b21_new['SL bs kho rau']
+    cols2_1 = ['CLV4', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'SL bs ST', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)', 'Tỷ lệ hao hụt', 'Đang xử lý', 'Chưa xử lý']
+    
     display_daily_table(df_b21_new, cols2_1, "Bang_2_1_CLV4", group_by_col='CLV4')
     nx_b21_new = generate_insights(df_kg_nhan, "Bảng 2.1", df_b21_new)
     st.text_area("Nhận xét Bảng 2.1:", value=nx_b21_new, key="nx_b21_new", height=120)
