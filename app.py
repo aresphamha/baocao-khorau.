@@ -1027,10 +1027,11 @@ with tab_daily:
         data['Số lượng chuyển_clean'] = to_numeric(data['Số lượng chuyển'])
         data['Chênh lệch_clean'] = to_numeric(data['Chênh lệch'])
         
-        data['CXD_HoanThanh'] = np.where(data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành', data['CXD'], 0)
-        # Sửa lại logic Chưa xử lý (chứa tất cả các case chưa hoàn thành, bao gồm cả rỗng)
-        data['CXD_DangXuLy'] = data['CXD'] - data['CXD_HoanThanh']
-        data['CXD_DangXuLy'] = np.where(data['CXD_DangXuLy'] < 0, 0, data['CXD_DangXuLy'])
+        # Lấy lượng chênh lệch chưa xác định (chưa có hướng xử lý)
+        # Sử dụng cột Trạng thái để phân tách Đang xử lý và Chưa xử lý
+        trang_thai = data['Trạng thái'].astype(str).str.strip().str.lower()
+        data['CXD_DangXuLy'] = np.where(trang_thai == 'đang xử lý', data['CXD'], 0)
+        data['CXD_ChuaXuLy'] = np.where(trang_thai != 'đang xử lý', data['CXD'], 0) # Gom những cái còn lại vào Chưa xử lý
         
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
         data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
@@ -1045,8 +1046,8 @@ with tab_daily:
             Số_lượng_hao_hụt=('Hao hụt', 'sum'),
             Số_lượng_bs_ST=('BS_ST', 'sum'),
             SL_bs_kho_rau=('Kho_Rau', 'sum'),
-            Số_lượng_đang_xử_lý=('CXD_HoanThanh', 'sum'),
-            Số_lượng_chưa_xác_định=('CXD_DangXuLy', 'sum')
+            Số_lượng_đang_xử_lý=('CXD_DangXuLy', 'sum'),
+            Số_lượng_chưa_xác_định=('CXD_ChuaXuLy', 'sum')
         ).reset_index()
         
         # Override SL chuyển if 25.5 and df_transfer_25_5 is loaded
@@ -1310,18 +1311,18 @@ with tab_daily:
     if df_cx.empty:
         st.info("Bảng 1.2 chỉ áp dụng cho dữ liệu từ ngày 27/05/2026 trở đi. Hãy chọn ngày phù hợp để xem.")
     else:
-        df_cx['CXD_HoanThanh'] = np.where(df_cx['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành', to_numeric(df_cx['CXD']), 0)
-        df_cx['CXD_DangXuLy'] = to_numeric(df_cx['CXD']) - df_cx['CXD_HoanThanh']
-        df_cx['CXD_DangXuLy'] = np.where(df_cx['CXD_DangXuLy'] < 0, 0, df_cx['CXD_DangXuLy'])
+        # Sử dụng logic mới
+        trang_thai = df_cx['Trạng thái'].astype(str).str.strip().str.lower()
+        df_cx['CXD_ChuaXuLy'] = np.where(trang_thai != 'đang xử lý', to_numeric(df_cx['CXD']), 0)
         
-        df_cxd_only = df_cx[df_cx['CXD_DangXuLy'] > 0]
+        df_cxd_only = df_cx[df_cx['CXD_ChuaXuLy'] > 0]
         
         if not df_cxd_only.empty:
             df_b12 = df_cxd_only.groupby(['CLV2', 'ID ST', 'Chi nhánh nhận']).agg(
                 SL_ma=('Mã hàng', 'nunique'),
                 SL_chuyen=('Số lượng chuyển', lambda x: to_numeric(x).sum()),
                 SL_chenh_lech=('Chênh lệch', lambda x: to_numeric(x).sum()),
-                SL_chua_xu_ly=('CXD_DangXuLy', 'sum'),
+                SL_chua_xu_ly=('CXD_ChuaXuLy', 'sum'),
                 Gia_tri_lech=('Tổng GT', lambda x: to_numeric(x).sum())
             ).reset_index()
             
@@ -1394,6 +1395,32 @@ with tab_daily:
     display_daily_table(df_b21_new, cols2_1, "Bang_2_1_CLV4", group_by_col='CLV4')
     nx_b21_new = generate_insights(df_kg_nhan, "Bảng 2.1", df_b21_new)
     st.text_area("Nhận xét Bảng 2.1:", value=nx_b21_new, key="nx_b21_new", height=120)
+
+    st.markdown("**2.1B Phân bổ mức độ nghiêm trọng của chênh lệch (Tính theo Số lượng PT/Dòng)**")
+    df_bucket = df_kg_nhan[to_numeric(df_kg_nhan['Chênh lệch']) > 0].copy()
+    df_bucket['Tỷ lệ % lệch'] = np.where(to_numeric(df_bucket['Số lượng chuyển']) > 0, (to_numeric(df_bucket['Chênh lệch']) / to_numeric(df_bucket['Số lượng chuyển'])) * 100, 100)
+    
+    conditions = [
+        (df_bucket['Tỷ lệ % lệch'] <= 5),
+        (df_bucket['Tỷ lệ % lệch'] > 5) & (df_bucket['Tỷ lệ % lệch'] <= 10),
+        (df_bucket['Tỷ lệ % lệch'] > 10) & (df_bucket['Tỷ lệ % lệch'] <= 15),
+        (df_bucket['Tỷ lệ % lệch'] > 15)
+    ]
+    choices = ['1. <= 5% (Bình thường)', '2. 5-10% (Cảnh báo)', '3. 10-15% (Bất thường)', '4. > 15% (Nghiêm trọng)']
+    df_bucket['Phân loại lệch'] = np.select(conditions, choices, default='Khác')
+    
+    if not df_bucket.empty:
+        bucket_grouped = df_bucket.groupby(['CLV4', 'Phân loại lệch']).size().unstack(fill_value=0).reset_index()
+        for choice in choices:
+            if choice not in bucket_grouped.columns:
+                bucket_grouped[choice] = 0
+        bucket_grouped['Tổng số PT lệch'] = bucket_grouped[choices].sum(axis=1)
+        bucket_grouped = bucket_grouped[['CLV4'] + choices + ['Tổng số PT lệch']].sort_values(by='Tổng số PT lệch', ascending=False)
+        format_custom_table_with_total(bucket_grouped, 'CLV4', "Bang_2_1_Bucket")
+        
+        st.info("💡 **Gợi ý Action:** Các dòng rơi vào nhóm 'Bình thường (<=5%)' có thể cấu hình Auto-Approve (Write-off) vì đây là hao hụt tự nhiên. Các nhóm từ 'Bất thường' đến 'Nghiêm trọng' (>10%) cần được SCM/DC tra soát lại khâu nhặt hàng (picking) hoặc yêu cầu ST cung cấp hình ảnh chứng minh để quy trách nhiệm đền bù rõ ràng.")
+    else:
+        st.info("Không có dữ liệu chênh lệch cho Hàng KG trong kỳ này.")
 
     st.markdown("**2.2 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Ngành Hàng CLV2)**")
     df_b22_old = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
