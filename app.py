@@ -1021,7 +1021,7 @@ with tab_daily:
         st.warning("Không có dữ liệu đối soát từ ngày 01/05/2026 trở đi.")
         df_filtered = pd.DataFrame()
     
-    def calculate_daily_metrics(data, filter_type='all'):
+    def calculate_daily_metrics(data, filter_type='all', group_by_col='CLV2'):
         if data.empty: return pd.DataFrame()
         
         data['Số lượng chuyển_clean'] = to_numeric(data['Số lượng chuyển'])
@@ -1035,7 +1035,7 @@ with tab_daily:
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
         data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
         
-        grouped = data.groupby('CLV2', dropna=False).agg(
+        grouped = data.groupby(group_by_col, dropna=False).agg(
             Số_lượng_chuyển=('Số lượng chuyển_clean', 'sum'),
             Số_lượng_chênh_lệch=('Chênh lệch_clean', 'sum'),
             Số_lượng_ST_chênh_lệch=('ST_Chenh_Lech', 'nunique'),
@@ -1062,13 +1062,13 @@ with tab_daily:
             elif filter_type == 'kg_khongnhan':
                 df_t = df_t[(df_t['ĐVT'].astype(str).str.upper() == 'KG') & (df_t['Số lượng nhận'] == 0)]
                 
-            transfer_grouped = df_t.groupby('CLV2')['Số lượng chuyển'].sum().reset_index()
+            transfer_grouped = df_t.groupby(group_by_col)['Số lượng chuyển'].sum().reset_index()
             grouped = grouped.drop(columns=['Số_lượng_chuyển'])
-            grouped = pd.merge(grouped, transfer_grouped, on='CLV2', how='left')
+            grouped = pd.merge(grouped, transfer_grouped, on=group_by_col, how='left')
             grouped.rename(columns={'Số lượng chuyển': 'Số_lượng_chuyển'}, inplace=True)
             grouped['Số_lượng_chuyển'] = grouped['Số_lượng_chuyển'].fillna(0)
             
-            cols_order = ['CLV2', 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_ST_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định']
+            cols_order = [group_by_col, 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_ST_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định']
             grouped = grouped[cols_order]
         
         grouped['Tỷ lệ line đã xử lý'] = ((grouped['Số_lượng_line_đã_xử_lý'] + grouped['Số_lượng_line_hao_hụt']) / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
@@ -1095,13 +1095,13 @@ with tab_daily:
         
         return grouped
 
-    def display_daily_table(df, cols, title_prefix):
+    def display_daily_table(df, cols, title_prefix, group_by_col='CLV2'):
         if df.empty:
             return
         df_show = df[cols].copy()
         tong_df = pd.DataFrame(index=[0])
         for col in cols:
-            if col == 'CLV2':
+            if col == group_by_col:
                 tong_df[col] = 'Tổng'
             elif col == 'Tỷ lệ line đã xử lý':
                 sum_line_xl = df['SL line đã xử lý'].sum()
@@ -1131,7 +1131,7 @@ with tab_daily:
                 else:
                     total_str = f"🟡 {str(val)}"
             else:
-                total_str = '⭐ TỔNG' if col == 'CLV2' else ''
+                total_str = '⭐ TỔNG' if col == group_by_col else ''
                 
             if col in ['Số lượng hao hụt', 'SL bs ST', 'SL bs kho rau', 'Tỷ lệ hao hụt']:
                 cat = 'Đã xử lý'
@@ -1338,20 +1338,27 @@ with tab_daily:
     st.subheader("Bảng 2: Đánh giá tình hình xử lý hàng theo ĐVT: KG")
     df_kg = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'KG'].copy()
     
-    st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch**")
+    st.markdown("**2.1 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Nhóm Hàng CLV4)**")
     df_kg_nhan = df_kg[to_numeric(df_kg['Số lượng nhận']) > 0]
-    df_b21 = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
+    df_b21_new = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan', group_by_col='CLV4')
+    cols2_1 = ['CLV4', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    display_daily_table(df_b21_new, cols2_1, "Bang_2_1_CLV4", group_by_col='CLV4')
+    nx_b21_new = generate_insights(df_kg_nhan, "Bảng 2.1", df_b21_new)
+    st.text_area("Nhận xét Bảng 2.1:", value=nx_b21_new, key="nx_b21_new", height=120)
+
+    st.markdown("**2.2 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Ngành Hàng CLV2)**")
+    df_b22_old = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
     cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
-    display_daily_table(df_b21, cols2, "Bang_2_1")
-    nx_b21 = generate_insights(df_kg_nhan, "Bảng 2.1", df_b21)
-    st.text_area("Nhận xét Bảng 2.1:", value=nx_b21, key="nx_b21", height=120)
+    display_daily_table(df_b22_old, cols2, "Bang_2_2")
+    nx_b22_old = generate_insights(df_kg_nhan, "Bảng 2.1", df_b22_old) # Use "Bảng 2.1" logic for insights since it's the old 2.1
+    st.text_area("Nhận xét Bảng 2.2:", value=nx_b22_old, key="nx_b22_old", height=120)
     
-    st.markdown("**2.2 Hàng có số lượng nhận = 0, phát sinh chênh lệch**")
+    st.markdown("**2.3 Hàng có số lượng nhận = 0, phát sinh chênh lệch**")
     df_kg_khongnhan = df_kg[to_numeric(df_kg['Số lượng nhận']) == 0]
-    df_b22 = calculate_daily_metrics(df_kg_khongnhan, filter_type='kg_khongnhan')
-    display_daily_table(df_b22, cols2, "Bang_2_2")
-    nx_b22 = generate_insights(df_kg_khongnhan, "Bảng 2.2", df_b22)
-    st.text_area("Nhận xét Bảng 2.2:", value=nx_b22, key="nx_b22", height=120)
+    df_b23 = calculate_daily_metrics(df_kg_khongnhan, filter_type='kg_khongnhan')
+    display_daily_table(df_b23, cols2, "Bang_2_3")
+    nx_b23 = generate_insights(df_kg_khongnhan, "Bảng 2.2", df_b23) # Use "Bảng 2.2" logic for insights since it's the old 2.2
+    st.text_area("Nhận xét Bảng 2.3:", value=nx_b23, key="nx_b23", height=120)
     
     st.subheader("Bảng 3: Đánh giá theo tình hình hàng Pack")
     df_pack = df_filtered[df_filtered['Loại hàng'].astype(str).str.upper() == 'PACK'].copy()
