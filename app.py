@@ -286,13 +286,30 @@ def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date
                         except:
                             d_str = "ngày " + str(date_str)
                             
+                    def get_top_clv4(col):
+                        if col in df_metrics.columns and df_metrics[col].max() > 0:
+                            top_row = df_metrics.loc[df_metrics[col].idxmax()]
+                            return f"[{top_row['CLV4']}] - {int(top_row[col])} item"
+                        return ""
+                        
+                    top_5_clv4 = get_top_clv4('<= 5%')
+                    top_10_clv4 = get_top_clv4('5-10%')
+                    top_15_clv4 = get_top_clv4('10-15%')
+                    top_15_plus_clv4 = get_top_clv4('> 15%')
+                            
                     msg = f"Hàng KG có số lượng nhập nhưng phát sinh chênh lệch ghi nhận {d_str}\n"
                     msg += f"- Lỗi ST chiếm {pct_st:.1f}%: trong đó nhập sót {pct_nhap:.1f}% và sai QT chiếm {pct_sai:.1f}%\n"
+                    if l_st_sai > 0:
+                        msg += f"  + SL ST sai QT: {int(l_st_sai)}\n"
                     msg += f"- Giao thiếu:\n"
                     msg += f"  + Nhóm <= 5%: {pct_5:.1f}%\n"
+                    if top_5_clv4: msg += f"    -> Nhóm lệch nhiều nhất: {top_5_clv4}\n"
                     msg += f"  + Nhóm 5 - 10%: {pct_10:.1f}%\n"
+                    if top_10_clv4: msg += f"    -> Nhóm lệch nhiều nhất: {top_10_clv4}\n"
                     msg += f"  + Nhóm 10 - 15%: {pct_15:.1f}%\n"
+                    if top_15_clv4: msg += f"    -> Nhóm lệch nhiều nhất: {top_15_clv4}\n"
                     msg += f"  + Nhóm > 15%: {pct_15_plus:.1f}%"
+                    if top_15_plus_clv4: msg += f"\n    -> Nhóm lệch nhiều nhất: {top_15_plus_clv4}"
                     return msg
             return "Chưa có đủ dữ liệu để đánh giá."
             
@@ -544,7 +561,7 @@ with tab_main:
         # Breakdown remaining
         df_cxd = pd.to_numeric(df['CXD'], errors='coerce').fillna(0)
         xuly_status = df['Xử lý'].astype(str).str.strip().str.lower()
-        pending = int(np.where(xuly_status == 'hoàn thành', df_cxd, 0).sum())
+        pending = int(np.where(xuly_status == 'đang xử lý', df_cxd, 0).sum())
         unprocessed = remaining - pending
         if unprocessed < 0: unprocessed = 0
         
@@ -566,7 +583,7 @@ with tab_main:
             
             c_cxd = pd.to_numeric(df_cat['CXD'], errors='coerce').fillna(0)
             c_xuly = df_cat['Xử lý'].astype(str).str.strip().str.lower()
-            c_pending = int(np.where(c_xuly == 'hoàn thành', c_cxd, 0).sum())
+            c_pending = int(np.where(c_xuly == 'đang xử lý', c_cxd, 0).sum())
             c_unprocessed = c_rem - c_pending
             if c_unprocessed < 0: c_unprocessed = 0
             
@@ -1069,8 +1086,8 @@ with tab_daily:
         data['Chênh lệch_clean'] = to_numeric(data['Chênh lệch'])
         
         # Lấy lượng chênh lệch chưa xác định (chưa có hướng xử lý)
-        # Sử dụng cột Trạng thái để phân tách Đang xử lý và Chưa xử lý
-        trang_thai = data['Trạng thái'].astype(str).str.strip().str.lower()
+        # Sử dụng cột Xử lý để phân tách Đang xử lý và Chưa xử lý
+        trang_thai = data['Xử lý'].astype(str).str.strip().str.lower()
         data['CXD_DangXuLy'] = np.where(trang_thai == 'đang xử lý', data['CXD'], 0)
         data['CXD_ChuaXuLy'] = np.where(trang_thai != 'đang xử lý', data['CXD'], 0) # Gom những cái còn lại vào Chưa xử lý
         
@@ -1366,7 +1383,7 @@ with tab_daily:
         st.info("Bảng 1.2 chỉ áp dụng cho dữ liệu từ ngày 27/05/2026 trở đi. Hãy chọn ngày phù hợp để xem.")
     else:
         # Sử dụng logic mới
-        trang_thai = df_cx['Trạng thái'].astype(str).str.strip().str.lower()
+        trang_thai = df_cx['Xử lý'].astype(str).str.strip().str.lower()
         df_cx['CXD_ChuaXuLy'] = np.where(trang_thai != 'đang xử lý', to_numeric(df_cx['CXD']), 0)
         
         df_cxd_only = df_cx[df_cx['CXD_ChuaXuLy'] > 0]
