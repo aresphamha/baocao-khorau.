@@ -184,7 +184,7 @@ def to_numeric(series):
         return pd.to_numeric(series.str.replace(',', '.'), errors='coerce').fillna(0)
     return pd.to_numeric(series, errors='coerce').fillna(0)
 
-def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None):
+def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date_str=None):
     if df_raw.empty and (df_grouped is None or df_grouped.empty):
         return "Không có dữ liệu trong kỳ báo cáo này."
     
@@ -257,6 +257,44 @@ def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None):
                     return f"Nguồn thông tin được dùng để xác định chênh lệch trả về các điểm nhận nhiều nhất là [{top_nguon}] (Số lượng: {fmt(top_sl)}).\n- Việc dựa phần lớn vào Check camera cho thấy tình trạng ST báo thiếu/dư hàng nhưng không cung cấp đủ hình ảnh xác thực đang khá cao. Cần nhắc nhở ST tuân thủ quy định chụp hình."
                 else:
                     return f"Nguồn thông tin được dùng để xác định chênh lệch trả về các điểm nhận nhiều nhất là dựa vào [{top_nguon}] (Số lượng: {fmt(top_sl)}).\n- Điều này phản ánh cơ sở dữ liệu chính yếu mà DC dùng để đối soát và phân bổ lượng hàng chênh lệch trong kỳ."
+            
+        elif table_type == "Bảng 2.1_New":
+            if df_metrics is not None and not df_metrics.empty:
+                t_cl = df_metrics['SL chênh lệch'].sum()
+                if t_cl > 0:
+                    l_st_nhap = df_metrics.get('Lỗi ST (Nhập thiếu)', pd.Series([0])).sum()
+                    l_st_sai = df_metrics.get('Lỗi ST (Sai QT)', pd.Series([0])).sum()
+                    l_st_tong = l_st_nhap + l_st_sai
+                    pct_st = (l_st_tong / t_cl) * 100
+                    pct_nhap = (l_st_nhap / t_cl) * 100
+                    pct_sai = (l_st_sai / t_cl) * 100
+                    
+                    giao_thieu_5 = df_metrics.get('<= 5%', pd.Series([0])).sum()
+                    giao_thieu_10 = df_metrics.get('5-10%', pd.Series([0])).sum()
+                    giao_thieu_15 = df_metrics.get('10-15%', pd.Series([0])).sum()
+                    giao_thieu_15_plus = df_metrics.get('> 15%', pd.Series([0])).sum()
+                    
+                    pct_5 = (giao_thieu_5 / t_cl) * 100
+                    pct_10 = (giao_thieu_10 / t_cl) * 100
+                    pct_15 = (giao_thieu_15 / t_cl) * 100
+                    pct_15_plus = (giao_thieu_15_plus / t_cl) * 100
+                    
+                    d_str = "kỳ báo cáo"
+                    if date_str and date_str != "Tất cả các ngày":
+                        try:
+                            d_str = "ngày " + date_str.split('/')[0] + "." + date_str.split('/')[1]
+                        except:
+                            d_str = "ngày " + str(date_str)
+                            
+                    msg = f"Hàng KG có số lượng nhập nhưng phát sinh chênh lệch ghi nhận {d_str}\n"
+                    msg += f"- Lỗi ST chiếm {pct_st:.1f}%: trong đó nhập sót {pct_nhap:.1f}% và sai QT chiếm {pct_sai:.1f}%\n"
+                    msg += f"- Giao thiếu:\n"
+                    msg += f"  + Nhóm <= 5%: {pct_5:.1f}%\n"
+                    msg += f"  + Nhóm 5 - 10%: {pct_10:.1f}%\n"
+                    msg += f"  + Nhóm 10 - 15%: {pct_15:.1f}%\n"
+                    msg += f"  + Nhóm > 15%: {pct_15_plus:.1f}%"
+                    return msg
+            return "Chưa có đủ dữ liệu để đánh giá."
             
         elif table_type == "Bảng 2.1":
             clv4_counts = df_raw['CLV4'].value_counts()
@@ -1442,6 +1480,9 @@ with tab_daily:
     display_daily_table(df_b21_new, cols2_1, "Bang_2_1_CLV4", group_by_col='CLV4')
     
     st.info("💡 **Gợi ý Action:** Các khoản lệch rơi vào mức `<= 5%` là hao hụt tự nhiên, có thể xem xét bỏ qua. Các mức từ `> 10%` là do lỗi chủ quan (kho nhặt thiếu, ST nhập sai), yêu cầu check lại quy trình.")
+
+    nx_b21_new = generate_insights(df_kg_nhan, "Bảng 2.1_New", df_metrics=df_b21_new, date_str=selected_date)
+    st.text_area("Nhận xét Bảng 2.1:", value=nx_b21_new, key="nx_b21_new", height=160)
 
     st.markdown("**2.2 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Ngành Hàng CLV2)**")
     df_b22_old = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
