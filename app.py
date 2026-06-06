@@ -1427,7 +1427,7 @@ with tab_daily:
             
     cols2_1 = [
         'CLV4', 'SL chuyển', 'SL chênh lệch', 
-        'SL bs ST', 'Lỗi ST (Nhập thiếu)', 'Lỗi ST (Sai QT)', 
+        'Lỗi ST (Nhập thiếu)', 'Lỗi ST (Sai QT)', 
         'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)',
         '<= 5%', '5-10%', '10-15%', '> 15%', 
         'Đang xử lý', 'Chưa xử lý'
