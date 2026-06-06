@@ -1158,11 +1158,17 @@ with tab_daily:
                 tong_df[col] = ''
                 
         tuples = []
+        total_cl_val = tong_df.iloc[0].get('SL chênh lệch', 0)
+        total_cl = float(total_cl_val) if pd.notna(total_cl_val) and str(total_cl_val).replace('.','',1).replace('-','',1).isdigit() else 0
+        
         for col in cols:
             val = tong_df.iloc[0][col]
             if val not in [None, 'Tổng', '', 0] and pd.notna(val):
                 if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
                     total_str = f"🟡 {format_vn(val)}"
+                    if col in ['Lỗi ST (Nhập thiếu)', 'Lỗi ST (Sai QT)', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)', '<= 5%', '5-10%', '10-15%', '> 15%'] and total_cl > 0:
+                        pct = (val / total_cl) * 100
+                        total_str += f" ({pct:.1f}%)"
                 else:
                     total_str = f"🟡 {str(val)}"
             else:
