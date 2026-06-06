@@ -561,7 +561,7 @@ with tab_main:
         # Breakdown remaining
         df_cxd = pd.to_numeric(df['CXD'], errors='coerce').fillna(0)
         xuly_status = df['Xử lý'].astype(str).str.strip().str.lower()
-        pending = int(np.where(xuly_status == 'đang xử lý', df_cxd, 0).sum())
+        pending = int(np.where(xuly_status == 'hoàn thành', df_cxd, 0).sum())
         unprocessed = remaining - pending
         if unprocessed < 0: unprocessed = 0
         
@@ -583,7 +583,7 @@ with tab_main:
             
             c_cxd = pd.to_numeric(df_cat['CXD'], errors='coerce').fillna(0)
             c_xuly = df_cat['Xử lý'].astype(str).str.strip().str.lower()
-            c_pending = int(np.where(c_xuly == 'đang xử lý', c_cxd, 0).sum())
+            c_pending = int(np.where(c_xuly == 'hoàn thành', c_cxd, 0).sum())
             c_unprocessed = c_rem - c_pending
             if c_unprocessed < 0: c_unprocessed = 0
             
@@ -1088,8 +1088,8 @@ with tab_daily:
         # Lấy lượng chênh lệch chưa xác định (chưa có hướng xử lý)
         # Sử dụng cột Xử lý để phân tách Đang xử lý và Chưa xử lý
         trang_thai = data['Xử lý'].astype(str).str.strip().str.lower()
-        data['CXD_DangXuLy'] = np.where(trang_thai == 'đang xử lý', data['CXD'], 0)
-        data['CXD_ChuaXuLy'] = np.where(trang_thai != 'đang xử lý', data['CXD'], 0) # Gom những cái còn lại vào Chưa xử lý
+        data['CXD_DangXuLy'] = np.where(trang_thai == 'hoàn thành', data['CXD'], 0)
+        data['CXD_ChuaXuLy'] = np.where(trang_thai != 'hoàn thành', data['CXD'], 0) # Gom những cái còn lại vào Chưa xử lý
         
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
         data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
@@ -1384,7 +1384,7 @@ with tab_daily:
     else:
         # Sử dụng logic mới
         trang_thai = df_cx['Xử lý'].astype(str).str.strip().str.lower()
-        df_cx['CXD_ChuaXuLy'] = np.where(trang_thai != 'đang xử lý', to_numeric(df_cx['CXD']), 0)
+        df_cx['CXD_ChuaXuLy'] = np.where(trang_thai != 'hoàn thành', to_numeric(df_cx['CXD']), 0)
         
         df_cxd_only = df_cx[df_cx['CXD_ChuaXuLy'] > 0]
         
