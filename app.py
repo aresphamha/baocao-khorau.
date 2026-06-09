@@ -1582,6 +1582,7 @@ with tab_daily:
 
     st.markdown("**2.2 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Ngành Hàng CLV2)**")
     df_b22_old = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
+    cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý', 'Không xử lý (WRITE OFF)']
     cols2_gt = ['CLV2', 'SL chuyển', 'GT chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'GT hao hụt', 'Tỷ lệ hao hụt', 'GT bs ST', 'GT bs kho rau', 'GT Đang xử lý', 'GT Chưa xử lý', 'Giá trị WRITE OFF']
     
     t22_sl, t22_gt = st.tabs(["📊 Số Lượng", "💰 Giá Trị"])
