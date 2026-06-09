@@ -1095,6 +1095,7 @@ with tab_daily:
         
         # Tính riêng cho Không xử lý (WRITE OFF) = case Chưa xử lý có Tổng GT < 100k
         data['CXD_WriteOff'] = np.where((trang_thai != 'hoàn thành') & (data['Tổng_GT_num'] < 100000), data['CXD'], 0)
+        data['CXD_WriteOff_Val'] = np.where((trang_thai != 'hoàn thành') & (data['Tổng_GT_num'] < 100000), data['Tổng_GT_num'], 0)
         
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
         data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
@@ -1113,7 +1114,8 @@ with tab_daily:
             SL_bs_kho_rau=('Kho_Rau', 'sum'),
             Số_lượng_đang_xử_lý=('CXD_DangXuLy', 'sum'),
             Số_lượng_chưa_xác_định=('CXD_ChuaXuLy', 'sum'),
-            Số_lượng_write_off=('CXD_WriteOff', 'sum')
+            Số_lượng_write_off=('CXD_WriteOff', 'sum'),
+            Giá_trị_write_off=('CXD_WriteOff_Val', 'sum')
         ).reset_index()
         
         # Override SL chuyển if 25.5 and df_transfer_25_5 is loaded
@@ -1135,7 +1137,7 @@ with tab_daily:
             grouped.rename(columns={'Số lượng chuyển': 'Số_lượng_chuyển'}, inplace=True)
             grouped['Số_lượng_chuyển'] = grouped['Số_lượng_chuyển'].fillna(0)
             
-            cols_order = [group_by_col, 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_ST_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định', 'Số_lượng_write_off']
+            cols_order = [group_by_col, 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_ST_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định', 'Số_lượng_write_off', 'Giá_trị_write_off']
             grouped = grouped[cols_order]
         
         grouped['Tỷ lệ line đã xử lý'] = ((grouped['Số_lượng_line_đã_xử_lý'] + grouped['Số_lượng_line_hao_hụt']) / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
@@ -1160,7 +1162,8 @@ with tab_daily:
             'SL_bs_kho_rau': 'SL bs kho rau',
             'Số_lượng_đang_xử_lý': 'Đang xử lý',
             'Số_lượng_chưa_xác_định': 'Chưa xử lý',
-            'Số_lượng_write_off': 'Không xử lý (WRITE OFF)'
+            'Số_lượng_write_off': 'Không xử lý (WRITE OFF)',
+            'Giá_trị_write_off': 'Giá trị WRITE OFF'
         })
         
         grouped['Tổng Trả Kho Rau'] = grouped['Số lượng hao hụt'] + grouped['SL bs kho rau']
@@ -1245,6 +1248,10 @@ with tab_daily:
             else:
                 cat = ''
                 col_name = col
+                if col == 'Không xử lý (WRITE OFF)' and 'Giá trị WRITE OFF' in df.columns:
+                    val_writeoff = df['Giá trị WRITE OFF'].sum()
+                    if val_writeoff > 0:
+                        col_name = f"Không xử lý (WRITE OFF)\n({format_vn(val_writeoff)} đ)"
                 
             tuples.append((total_str, cat, col_name))
             
