@@ -1085,11 +1085,16 @@ with tab_daily:
         data['Số lượng chuyển_clean'] = to_numeric(data['Số lượng chuyển'])
         data['Chênh lệch_clean'] = to_numeric(data['Chênh lệch'])
         
+        data['Tổng_GT_num'] = to_numeric(data['Tổng GT'])
+        
         # Lấy lượng chênh lệch chưa xác định (chưa có hướng xử lý)
         # Sử dụng cột Xử lý để phân tách Đang xử lý và Chưa xử lý
         trang_thai = data['Xử lý'].astype(str).str.strip().str.lower()
         data['CXD_DangXuLy'] = np.where(trang_thai == 'hoàn thành', data['CXD'], 0)
-        data['CXD_ChuaXuLy'] = np.where(trang_thai != 'hoàn thành', data['CXD'], 0) # Gom những cái còn lại vào Chưa xử lý
+        data['CXD_ChuaXuLy'] = np.where(trang_thai != 'hoàn thành', data['CXD'], 0) # Có tổng mọi giá trị
+        
+        # Tính riêng cho Không xử lý (WRITE OFF) = case Chưa xử lý có Tổng GT < 100k
+        data['CXD_WriteOff'] = np.where((trang_thai != 'hoàn thành') & (data['Tổng_GT_num'] < 100000), data['CXD'], 0)
         
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
         data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
@@ -1107,7 +1112,8 @@ with tab_daily:
             ST_sai_QT=('ST_SaiQT', 'sum'),
             SL_bs_kho_rau=('Kho_Rau', 'sum'),
             Số_lượng_đang_xử_lý=('CXD_DangXuLy', 'sum'),
-            Số_lượng_chưa_xác_định=('CXD_ChuaXuLy', 'sum')
+            Số_lượng_chưa_xác_định=('CXD_ChuaXuLy', 'sum'),
+            Số_lượng_write_off=('CXD_WriteOff', 'sum')
         ).reset_index()
         
         # Override SL chuyển if 25.5 and df_transfer_25_5 is loaded
@@ -1129,7 +1135,7 @@ with tab_daily:
             grouped.rename(columns={'Số lượng chuyển': 'Số_lượng_chuyển'}, inplace=True)
             grouped['Số_lượng_chuyển'] = grouped['Số_lượng_chuyển'].fillna(0)
             
-            cols_order = [group_by_col, 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_ST_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định']
+            cols_order = [group_by_col, 'Số_lượng_chuyển', 'Số_lượng_chênh_lệch', 'Số_lượng_ST_chênh_lệch', 'Số_lượng_line_chênh_lệch', 'Số_lượng_line_hao_hụt', 'Số_lượng_line_đã_xử_lý', 'Số_lượng_hao_hụt', 'Số_lượng_bs_ST', 'SL_bs_kho_rau', 'Số_lượng_đang_xử_lý', 'Số_lượng_chưa_xác_định', 'Số_lượng_write_off']
             grouped = grouped[cols_order]
         
         grouped['Tỷ lệ line đã xử lý'] = ((grouped['Số_lượng_line_đã_xử_lý'] + grouped['Số_lượng_line_hao_hụt']) / grouped['Số_lượng_line_chênh_lệch'] * 100).round(2).astype(str) + '%'
@@ -1153,7 +1159,8 @@ with tab_daily:
             'ST_sai_QT': 'Lỗi ST (Sai QT)',
             'SL_bs_kho_rau': 'SL bs kho rau',
             'Số_lượng_đang_xử_lý': 'Đang xử lý',
-            'Số_lượng_chưa_xác_định': 'Chưa xử lý'
+            'Số_lượng_chưa_xác_định': 'Chưa xử lý',
+            'Số_lượng_write_off': 'Không xử lý (WRITE OFF)'
         })
         
         grouped['Tổng Trả Kho Rau'] = grouped['Số lượng hao hụt'] + grouped['SL bs kho rau']
@@ -1275,7 +1282,7 @@ with tab_daily:
 
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý")
     df_b1 = calculate_daily_metrics(df_filtered, filter_type='all')
-    cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    cols = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý', 'Không xử lý (WRITE OFF)']
     display_daily_table(df_b1, cols, "Bang_1")
     nx_b1 = generate_insights(df_filtered, "Bảng 1", df_b1)
     st.text_area("Nhận xét Bảng 1:", value=nx_b1, key="nx_b1", height=100)
@@ -1491,7 +1498,7 @@ with tab_daily:
         'Lỗi ST (Nhập thiếu)', 'Lỗi ST (Sai QT)', 
         'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)',
         '<= 5%', '5-10%', '10-15%', '> 15%', 
-        'Đang xử lý', 'Chưa xử lý'
+        'Đang xử lý', 'Chưa xử lý', 'Không xử lý (WRITE OFF)'
     ]
     
     display_daily_table(df_b21_new, cols2_1, "Bang_2_1_CLV4", group_by_col='CLV4')
@@ -1503,7 +1510,7 @@ with tab_daily:
 
     st.markdown("**2.2 Hàng có số lượng nhận > 0, phát sinh chênh lệch (Theo Ngành Hàng CLV2)**")
     df_b22_old = calculate_daily_metrics(df_kg_nhan, filter_type='kg_nhan')
-    cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý']
+    cols2 = ['CLV2', 'SL chuyển', 'SL chênh lệch', 'SL ST chênh lệch', 'SL line chênh lệch', 'SL line hao hụt', 'SL line đã xử lý', 'Tỷ lệ line đã xử lý', 'Số lượng hao hụt', 'Tỷ lệ hao hụt', 'SL bs ST', 'SL bs kho rau', 'Đang xử lý', 'Chưa xử lý', 'Không xử lý (WRITE OFF)']
     display_daily_table(df_b22_old, cols2, "Bang_2_2")
     nx_b22_old = generate_insights(df_kg_nhan, "Bảng 2.1", df_b22_old) # Use "Bảng 2.1" logic for insights since it's the old 2.1
     st.text_area("Nhận xét Bảng 2.2:", value=nx_b22_old, key="nx_b22_old", height=120)
