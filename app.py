@@ -1267,8 +1267,10 @@ with tab_daily:
                 
             if col in ['Số lượng hao hụt', 'SL bs ST', 'Lỗi ST (Nhập thiếu)', 'Lỗi ST (Sai QT)', 'SL bs kho rau', 'Tỷ lệ hao hụt', 'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)', 'GT hao hụt', 'GT bs ST', 'GT Lỗi ST (Nhập thiếu)', 'GT Lỗi ST (Sai QT)', 'GT bs kho rau', 'GT Tổng Trả Kho Rau']:
                 cat = 'Đã xử lý'
+                col_name = col
             elif col in ['<= 5%', '5-10%', '10-15%', '> 15%', 'GT <= 5%', 'GT 5-10%', 'GT 10-15%', 'GT > 15%']:
                 cat = 'Phân bổ Chênh lệch (Số lượng)' if 'GT' not in col else 'Phân bổ Chênh lệch (Giá trị)'
+                col_name = col
             else:
                 cat = ''
                 col_name = col
@@ -1551,6 +1553,14 @@ with tab_daily:
         if c not in df_b21_new.columns:
             df_b21_new[c] = 0
             
+    cols2_1 = [
+        'CLV4', 'SL chuyển', 'SL chênh lệch', 
+        'Lỗi ST (Nhập thiếu)', 'Lỗi ST (Sai QT)', 
+        'Tổng Trả Kho Rau', 'Hao hụt (<=10%)', 'Trả KR (Lỗi giao thiếu)',
+        '<= 5%', '5-10%', '10-15%', '> 15%', 
+        'Đang xử lý', 'Chưa xử lý', 'Không xử lý (WRITE OFF)'
+    ]
+    
     cols2_1_gt = [
         'CLV4', 'SL chuyển', 'GT chênh lệch', 
         'GT Lỗi ST (Nhập thiếu)', 'GT Lỗi ST (Sai QT)', 
