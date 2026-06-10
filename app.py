@@ -126,12 +126,17 @@ def load_data():
     
     df['Qty_P'] = df['SL chênh lệch CXD'].apply(clean_number)
     
+    # Định nghĩa Siêu thị: Có chữ 'siêu thị' HOẶC (không có 'kho rau' VÀ không có 'chưa xác định')
+    is_kho_rau = df['LyDo_Y'].str.contains('kho rau')
+    is_cxd = df['LyDo_Y'].str.contains('chưa xác định')
+    is_sieu_thi = df['LyDo_X'].str.contains('siêu thị') | (~is_kho_rau & ~is_cxd)
+    
     df['Hao hụt'] = np.where(df['LyDo_W'].str.contains('hao hụt'), df['Qty_N'], 0)
-    df['BS_ST'] = np.where(df['LyDo_X'].str.contains('siêu thị'), df['Qty_O'], 0)
-    df['ST_NhapThieu'] = np.where(df['LyDo_X'].str.contains('siêu thị') & df['LyDo_Loi'].str.contains('thiếu'), df['Qty_O'], 0)
-    df['ST_SaiQT'] = np.where(df['LyDo_X'].str.contains('siêu thị') & ~df['LyDo_Loi'].str.contains('thiếu'), df['Qty_O'], 0)
-    df['Kho_Rau'] = np.where(df['LyDo_Y'].str.contains('kho rau'), df['Qty_P'], 0)
-    df['CXD'] = np.where(df['LyDo_Y'].str.contains('chưa xác định'), df['Qty_P'], 0)
+    df['BS_ST'] = np.where(is_sieu_thi, df['Qty_O'], 0)
+    df['ST_NhapThieu'] = np.where(is_sieu_thi & df['LyDo_Loi'].str.contains('thiếu'), df['Qty_O'], 0)
+    df['ST_SaiQT'] = np.where(is_sieu_thi & ~df['LyDo_Loi'].str.contains('thiếu'), df['Qty_O'], 0)
+    df['Kho_Rau'] = np.where(is_kho_rau, df['Qty_P'], 0)
+    df['CXD'] = np.where(is_cxd, df['Qty_P'], 0)
             
     df['Ngày'] = pd.to_datetime(df['Ngày chuyển hàng'], format='%m/%d/%Y', errors='coerce')
     df['Ngày_str'] = df['Ngày'].dt.strftime('%d/%m/%Y').fillna(df['Ngày chuyển hàng'])
@@ -183,6 +188,25 @@ def to_numeric(series):
     if series.dtype == 'object':
         return pd.to_numeric(series.str.replace(',', '.'), errors='coerce').fillna(0)
     return pd.to_numeric(series, errors='coerce').fillna(0)
+
+# --- GLOBAL WRITE OFF CALCULATION ---
+trang_thai_g = df_all.get('Xử lý', pd.Series(['']*len(df_all))).astype(str).str.strip().str.lower()
+df_all['CXD_ChuaXuLy'] = np.where(trang_thai_g != 'hoàn thành', to_numeric(df_all['CXD']), 0)
+df_all['Tổng_GT_num'] = to_numeric(df_all['Tổng GT'])
+
+df_cxd_g = df_all[df_all['CXD_ChuaXuLy'] > 0]
+if not df_cxd_g.empty:
+    cxd_grouped_g = df_cxd_g.groupby(['Ngày_str', 'CLV2', 'ID ST'])['Tổng_GT_num'].sum().reset_index()
+    cxd_grouped_g['Is_WriteOff_Group'] = cxd_grouped_g['Tổng_GT_num'] < 100000
+    cxd_grouped_g.set_index(['Ngày_str', 'CLV2', 'ID ST'], inplace=True)
+    w_map = cxd_grouped_g['Is_WriteOff_Group'].to_dict()
+    df_all['Is_WriteOff_Group'] = df_all.set_index(['Ngày_str', 'CLV2', 'ID ST']).index.map(w_map).fillna(False)
+else:
+    df_all['Is_WriteOff_Group'] = False
+
+df_all['CXD_WriteOff'] = np.where(df_all['Is_WriteOff_Group'] & (df_all['CXD_ChuaXuLy'] > 0), df_all['CXD'], 0)
+df_all['CXD_WriteOff_Val'] = np.where(df_all['Is_WriteOff_Group'] & (df_all['CXD_ChuaXuLy'] > 0), df_all['Tổng_GT_num'], 0)
+# ------------------------------------
 
 def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date_str=None):
     if df_raw.empty and (df_grouped is None or df_grouped.empty):
@@ -411,7 +435,7 @@ with tab_main:
 
     # Process Dataframes
     # 1. Theo ngày
-    pivot_ngay_sum = df_active.groupby('Ngày_str')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tổng GT', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD']].sum()
+    pivot_ngay_sum = df_active.groupby('Ngày_str')[['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tổng GT', 'Hao hụt', 'BS_ST', 'Kho_Rau', 'CXD', 'CXD_WriteOff']].sum()
     pivot_ngay_count = df_active[df_active['Chênh lệch'].abs() > 0].groupby('Ngày_str').size().rename('SL line chênh lệch')
     pivot_ngay_nhap0 = df_active[(df_active['Số lượng nhận'] == 0) & (df_active['Chênh lệch'].abs() > 0)].groupby('Ngày_str').size().rename('SL line nhập=0')
 
@@ -429,18 +453,20 @@ with tab_main:
         'BS_ST': 'SL đã tạo bs cho ST',
         'Kho_Rau': 'SL đã xác nhận được trả kho rau',
         'Hao hụt': 'Số lượng hao hụt',
-        'CXD': 'Số lượng chưa xác định'
+        'CXD': 'Số lượng chưa xác định',
+        'CXD_WriteOff': 'Không xử lý (WRITE OFF)'
     }, inplace=True)
     tong_row_ngay.rename(columns={
         'Tổng GT': 'Giá trị chênh lệch (VNĐ)',
         'BS_ST': 'SL đã tạo bs cho ST',
         'Kho_Rau': 'SL đã xác nhận được trả kho rau',
         'Hao hụt': 'Số lượng hao hụt',
-        'CXD': 'Số lượng chưa xác định'
+        'CXD': 'Số lượng chưa xác định',
+        'CXD_WriteOff': 'Không xử lý (WRITE OFF)'
     }, inplace=True)
 
     # 1B. Theo ngày (Giá trị)
-    pivot_ngay_val = df_active.groupby('Ngày_str')[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']].sum().reset_index()
+    pivot_ngay_val = df_active.groupby('Ngày_str')[['Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định', 'CXD_WriteOff_Val']].sum().reset_index()
     pivot_ngay_val['Ngày_dt'] = pd.to_datetime(pivot_ngay_val['Ngày_str'], format='%d/%m/%Y', errors='coerce')
     pivot_ngay_val = pivot_ngay_val.sort_values(by='Ngày_dt').drop(columns=['Ngày_dt'])
 
@@ -452,7 +478,8 @@ with tab_main:
         'Tổng ST': 'Giá trị đã tạo bs cho ST (VNĐ)',
         'Tổng kho rau': 'Giá trị đã xác nhận được trả kho rau (VNĐ)',
         'Tổng hao hụt': 'Giá trị hao hụt (VNĐ)',
-        'Tổng chưa xác định': 'Giá trị chưa xác định (VNĐ)'
+        'Tổng chưa xác định': 'Giá trị chưa xác định (VNĐ)',
+        'CXD_WriteOff_Val': 'Giá trị WRITE OFF (VNĐ)'
     }, inplace=True)
 
     if not tong_row_ngay_val.empty:
@@ -461,7 +488,8 @@ with tab_main:
             'Tổng ST': 'Giá trị đã tạo bs cho ST (VNĐ)',
             'Tổng kho rau': 'Giá trị đã xác nhận được trả kho rau (VNĐ)',
             'Tổng hao hụt': 'Giá trị hao hụt (VNĐ)',
-            'Tổng chưa xác định': 'Giá trị chưa xác định (VNĐ)'
+            'Tổng chưa xác định': 'Giá trị chưa xác định (VNĐ)',
+            'CXD_WriteOff_Val': 'Giá trị WRITE OFF (VNĐ)'
         }, inplace=True)
 
     # 2. Theo CLV2
@@ -1099,8 +1127,12 @@ with tab_daily:
         
         data['GT_CXD_DangXuLy'] = np.where(trang_thai == 'hoàn thành', data['Tổng_CXD_num'], 0)
         data['GT_CXD_ChuaXuLy'] = np.where(trang_thai != 'hoàn thành', data['Tổng_CXD_num'], 0)
-        data['GT_ST_NhapThieu'] = np.where(data['LyDo_X'].str.contains('siêu thị') & data['LyDo_Loi'].str.contains('thiếu'), data['Tổng_ST_num'], 0)
-        data['GT_ST_SaiQT'] = np.where(data['LyDo_X'].str.contains('siêu thị') & ~data['LyDo_Loi'].str.contains('thiếu'), data['Tổng_ST_num'], 0)
+        is_kho_rau_daily = data['LyDo_Y'].str.contains('kho rau')
+        is_cxd_daily = data['LyDo_Y'].str.contains('chưa xác định')
+        is_sieu_thi_daily = data['LyDo_X'].str.contains('siêu thị') | (~is_kho_rau_daily & ~is_cxd_daily)
+        
+        data['GT_ST_NhapThieu'] = np.where(is_sieu_thi_daily & data['LyDo_Loi'].str.contains('thiếu'), data['Tổng_ST_num'], 0)
+        data['GT_ST_SaiQT'] = np.where(is_sieu_thi_daily & ~data['LyDo_Loi'].str.contains('thiếu'), data['Tổng_ST_num'], 0)
         
         # Tính riêng cho Không xử lý (WRITE OFF) đồng bộ với Bảng 1.2 (Tổng GT < 100k theo ST)
         df_cxd = data[data['CXD_ChuaXuLy'] > 0]
