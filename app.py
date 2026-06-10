@@ -74,7 +74,7 @@ def clean_number(x):
 def load_data():
     url_apr = "https://docs.google.com/spreadsheets/d/1mYAbl4UDhjUSfr44xYdZX5YC_mG5-_9fK4tWgG8zlew/export?format=csv"
     url_may = "https://docs.google.com/spreadsheets/d/1ee53DtTCNLsr94afbuQEY_yI2EzNfrgPGCdvNDLIUZ0/export?format=csv"
-    url_jun = "https://docs.google.com/spreadsheets/d/1065akVGAsBNjONniCS6ccU_mmsRFXb663_Qms8U053Q/export?format=csv&gid=1343221916"
+    url_jun = "https://docs.google.com/spreadsheets/d/1065akVGAsBNjONniCS6ccU_mmsRFXb663_Qms8U053Q/export?format=csv&gid=1422896115"
     
     def read_csv_with_retry(url, max_retries=3):
         import time
