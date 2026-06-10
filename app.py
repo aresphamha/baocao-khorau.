@@ -1102,9 +1102,19 @@ with tab_daily:
         data['GT_ST_NhapThieu'] = np.where(data['LyDo_X'].str.contains('siêu thị') & data['LyDo_Loi'].str.contains('thiếu'), data['Tổng_ST_num'], 0)
         data['GT_ST_SaiQT'] = np.where(data['LyDo_X'].str.contains('siêu thị') & ~data['LyDo_Loi'].str.contains('thiếu'), data['Tổng_ST_num'], 0)
         
-        # Tính riêng cho Không xử lý (WRITE OFF) = case Chưa xử lý có Tổng GT < 100k
-        data['CXD_WriteOff'] = np.where((trang_thai != 'hoàn thành') & (data['Tổng_GT_num'] < 100000), data['CXD'], 0)
-        data['CXD_WriteOff_Val'] = np.where((trang_thai != 'hoàn thành') & (data['Tổng_GT_num'] < 100000), data['Tổng_GT_num'], 0)
+        # Tính riêng cho Không xử lý (WRITE OFF) đồng bộ với Bảng 1.2 (Tổng GT < 100k theo ST)
+        df_cxd = data[data['CXD_ChuaXuLy'] > 0]
+        if not df_cxd.empty:
+            cxd_grouped = df_cxd.groupby(['CLV2', 'ID ST'])['Tổng_GT_num'].sum().reset_index()
+            cxd_grouped['Is_WriteOff_Group'] = cxd_grouped['Tổng_GT_num'] < 100000
+            cxd_grouped.set_index(['CLV2', 'ID ST'], inplace=True)
+            writeoff_map = cxd_grouped['Is_WriteOff_Group'].to_dict()
+            data['Is_WriteOff_Group'] = data.set_index(['CLV2', 'ID ST']).index.map(writeoff_map).fillna(False)
+        else:
+            data['Is_WriteOff_Group'] = False
+            
+        data['CXD_WriteOff'] = np.where(data['Is_WriteOff_Group'] & (data['CXD_ChuaXuLy'] > 0), data['CXD'], 0)
+        data['CXD_WriteOff_Val'] = np.where(data['Is_WriteOff_Group'] & (data['CXD_ChuaXuLy'] > 0), data['Tổng_GT_num'], 0)
         
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
         data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
@@ -1644,4 +1654,3 @@ with tab_daily:
         
     nx_b4 = generate_insights(df_kg_hao_hut, "Bảng 4", df_top_hh)
     st.text_area("Nhận xét Bảng 4:", value=nx_b4, key="nx_b4", height=100)
-
