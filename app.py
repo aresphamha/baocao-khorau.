@@ -567,6 +567,35 @@ with tab_main:
             return f"{val/1000:.1f} ngàn".replace('.', ',')
         return format_vn(val)
 
+    def format_custom_table_with_total(df, name_col, title_prefix):
+        if df.empty: return
+        
+        tong_df = pd.DataFrame(index=[0])
+        for col in df.columns:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                tong_df[col] = df[col].sum()
+            else:
+                tong_df[col] = ''
+                
+        tuples = []
+        for col in df.columns:
+            val = tong_df.iloc[0][col]
+            if val not in [None, 'Tổng', '', 0] and pd.notna(val):
+                if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
+                    total_str = f"🟡 {format_vn(val)}"
+                else:
+                    total_str = f"🟡 {str(val)}"
+            else:
+                total_str = '⭐ TỔNG' if col == name_col else ''
+                
+            tuples.append((total_str, col))
+            
+        df_renamed = df.copy()
+        df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
+        styler = df_renamed.style.format(format_vn).hide(axis="index")
+        display_df_with_download(styler, f"Daily_{title_prefix}")
+
+
     def compute_daily_summary(df, date_str):
         """Calculate daily summary for given DataFrame and date string."""
         if df.empty:
@@ -1375,34 +1404,6 @@ with tab_daily:
         df_renamed = df_show.copy()
         df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
         display_df_with_download(df_renamed.style.format(format_vn), f"Daily_{title_prefix}")
-
-    def format_custom_table_with_total(df, name_col, title_prefix):
-        if df.empty: return
-        
-        tong_df = pd.DataFrame(index=[0])
-        for col in df.columns:
-            if pd.api.types.is_numeric_dtype(df[col]):
-                tong_df[col] = df[col].sum()
-            else:
-                tong_df[col] = ''
-                
-        tuples = []
-        for col in df.columns:
-            val = tong_df.iloc[0][col]
-            if val not in [None, 'Tổng', '', 0] and pd.notna(val):
-                if pd.api.types.is_numeric_dtype(type(val)) or isinstance(val, (int, float)):
-                    total_str = f"🟡 {format_vn(val)}"
-                else:
-                    total_str = f"🟡 {str(val)}"
-            else:
-                total_str = '⭐ TỔNG' if col == name_col else ''
-                
-            tuples.append((total_str, col))
-            
-        df_renamed = df.copy()
-        df_renamed.columns = pd.MultiIndex.from_tuples(tuples)
-        styler = df_renamed.style.format(format_vn).hide(axis="index")
-        display_df_with_download(styler, f"Daily_{title_prefix}")
 
     st.subheader("Bảng 1: Đánh giá nhanh tình hình xử lý")
     df_b1 = calculate_daily_metrics(df_filtered, filter_type='all')
