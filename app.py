@@ -398,7 +398,7 @@ def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date
                 
                 return f"- Top 3 ngành hàng (CLV4) phát sinh hao hụt nhiều nhất: {top3_clv4_str}.\n- Mã hàng có sản lượng hao hụt nghiêm trọng nhất là [{top_sku}] (Hao hụt: {top_hh} KG).\n- Khuyến nghị: Cần ưu tiên kiểm tra chất lượng thực tế và quy trình đóng gói đối với mã hàng này."
 
-        elif table_type == "Bảng 5":
+        elif table_type == "Bảng 6":
             if df_grouped is not None and not df_grouped.empty:
                 top_dc = df_grouped.iloc[0]['DC xác nhận']
                 top_loi = df_grouped.iloc[0]['Lỗi']
@@ -1079,6 +1079,54 @@ with tab_main:
     else:
         st.info(f"Không có dữ liệu lỗi 'ST nhập thiếu' trong {week_filter}.")
 
+    st.write("---")
+    st.subheader("Bảng 6: Đánh giá LỖI TRẢ VỀ KHO RAU (Theo DC Xác Nhận)")
+    st.markdown("Báo cáo số lượng trả về Kho Rau (Từ cột P) dựa trên cột DC xác nhận (AB) và cột Lỗi (V).")
+    
+    df_b6_base = df_week[to_numeric(df_week['Kho_Rau']) > 0].copy()
+    if not df_b6_base.empty:
+        if 'DC xác nhận' not in df_b6_base.columns:
+            df_b6_base['DC xác nhận'] = 'N/A'
+        if 'Lỗi' not in df_b6_base.columns:
+            df_b6_base['Lỗi'] = 'N/A'
+            
+        col_kfm = 'KFM phản hồi'
+        if col_kfm not in df_b6_base.columns:
+            col_kfm = df_b6_base.columns[29] if len(df_b6_base.columns) > 29 else None
+            
+        df_b6_base['DC xác nhận'] = df_b6_base['DC xác nhận'].fillna('Chưa xác nhận').replace('', 'Chưa xác nhận')
+        df_b6_base['Lỗi'] = df_b6_base['Lỗi'].fillna('Không có ghi chú').replace('', 'Không có ghi chú')
+        
+        groupby_cols = ['DC xác nhận', 'Lỗi']
+        if col_kfm:
+            df_b6_base[col_kfm] = df_b6_base[col_kfm].fillna('Không có phản hồi').replace('', 'Không có phản hồi')
+            groupby_cols.append(col_kfm)
+        
+        df_b6 = df_b6_base.groupby(groupby_cols).agg(
+            Tổng_số_lượng=('Kho_Rau', lambda x: to_numeric(x).sum()),
+            Số_line=('Mã hàng', 'count')
+        ).reset_index()
+        
+        df_b6 = df_b6.sort_values(by='Tổng_số_lượng', ascending=False)
+        
+        rename_dict = {
+            'Tổng_số_lượng': 'Tổng số lượng',
+            'Số_line': 'Số line'
+        }
+        if col_kfm and col_kfm != 'KFM phản hồi':
+            rename_dict[col_kfm] = 'KFM phản hồi'
+            
+        df_b6.rename(columns=rename_dict, inplace=True)
+        
+        format_custom_table_with_total(df_b6, 'DC xác nhận', "Bang_6_Loi_Tra_Kho_Rau")
+    else:
+        st.info("Không có dữ liệu trả về Kho Rau trong kỳ báo cáo này.")
+        df_b6 = pd.DataFrame()
+        
+    nx_b6 = generate_insights(df_b6_base, "Bảng 6", df_b6)
+    st.text_area("Nhận xét Bảng 6:", value=nx_b6, key="nx_b6", height=100)
+
+
 # ==========================================
 # TRANG 2: BÁO CÁO DAILY MỚI
 # ==========================================
@@ -1138,6 +1186,9 @@ with tab_daily:
             data['ST_Total_CXD_Val'] = 0
             
         data['ST_Total_CXD_Val'] = data['ST_Total_CXD_Val'].fillna(0)
+        
+        # Cập nhật lại trang_thai vì pd.merge tạo ra data mới và index bị thay đổi
+        trang_thai = data['Xử lý'].astype(str).str.strip().str.lower()
         
         # Tính riêng cho Không xử lý (WRITE OFF) = case Chưa xử lý có Tổng GT theo ST < 100k
         data['CXD_WriteOff'] = np.where((trang_thai != 'hoàn thành') & (data['ST_Total_CXD_Val'] < 100000), data['CXD'], 0)
