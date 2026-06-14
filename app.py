@@ -72,8 +72,9 @@ def clean_number(x):
 
 @st.cache_data(ttl=600)  # Tự động tải lại sau mỗi 10 phút nếu có người truy cập
 def load_data():
-    url_may = "https://docs.google.com/spreadsheets/d/1suHerEzgKzxB7g1UbrGIZPNaxK5a96xFnmxcIQywpko/export?format=csv&gid=1422896115"
     url_apr = "https://docs.google.com/spreadsheets/d/1mYAbl4UDhjUSfr44xYdZX5YC_mG5-_9fK4tWgG8zlew/export?format=csv"
+    url_may = "https://docs.google.com/spreadsheets/d/1ee53DtTCNLsr94afbuQEY_yI2EzNfrgPGCdvNDLIUZ0/export?format=csv"
+    url_jun = "https://docs.google.com/spreadsheets/d/1065akVGAsBNjONniCS6ccU_mmsRFXb663_Qms8U053Q/export?format=csv"
     
     def read_csv_with_retry(url, max_retries=3):
         import time
@@ -89,11 +90,13 @@ def load_data():
                     raise e
                 time.sleep(2)
                 
-    df_may = read_csv_with_retry(url_may)
     df_apr = read_csv_with_retry(url_apr)
+    df_may = read_csv_with_retry(url_may)
+    df_jun = read_csv_with_retry(url_jun)
     
-    df_may.columns = [str(c).strip() for c in df_may.columns]
     df_apr.columns = [str(c).strip() for c in df_apr.columns]
+    df_may.columns = [str(c).strip() for c in df_may.columns]
+    df_jun.columns = [str(c).strip() for c in df_jun.columns]
     
     # Đồng bộ tên cột Tháng 4 cho giống với Tháng 5
     df_apr.rename(columns={
@@ -102,7 +105,18 @@ def load_data():
         'SLbổ sung cho ST': 'SL trả tồn về ST'
     }, inplace=True)
     
-    df = pd.concat([df_apr, df_may], ignore_index=True)
+    df_jun.rename(columns={
+        'ST': 'ID ST',
+        'SL chênh lệch ĐXL': 'SL chênh lệch CXD',
+        'SLbổ sung cho ST': 'SL trả tồn về ST'
+    }, inplace=True)
+    
+    # Loại trừ các ngày của tháng 5 trong sheet tháng 6
+    df_jun['temp_date'] = pd.to_datetime(df_jun['Ngày chuyển hàng'], format='%m/%d/%Y', errors='coerce')
+    df_jun = df_jun[(df_jun['temp_date'].dt.month != 5) | (df_jun['Ngày chuyển hàng'].isna())].copy()
+    df_jun = df_jun.drop(columns=['temp_date'])
+    
+    df = pd.concat([df_apr, df_may, df_jun], ignore_index=True)
     
     for col in ['Số lượng chuyển', 'Số lượng nhận', 'Chênh lệch', 'Tổng GT', 'Tổng ST', 'Tổng kho rau', 'Tổng hao hụt', 'Tổng chưa xác định']:
         if col in df.columns:
@@ -1668,19 +1682,33 @@ with tab_daily:
         if 'Lỗi' not in df_b5_base.columns:
             df_b5_base['Lỗi'] = 'N/A'
             
+        col_kfm = 'KFM phản hồi'
+        if col_kfm not in df_b5_base.columns:
+            col_kfm = df_b5_base.columns[29] if len(df_b5_base.columns) > 29 else None
+            
         df_b5_base['DC xác nhận'] = df_b5_base['DC xác nhận'].fillna('Chưa xác nhận').replace('', 'Chưa xác nhận')
         df_b5_base['Lỗi'] = df_b5_base['Lỗi'].fillna('Không có ghi chú').replace('', 'Không có ghi chú')
         
-        df_b5 = df_b5_base.groupby(['DC xác nhận', 'Lỗi']).agg(
+        groupby_cols = ['DC xác nhận', 'Lỗi']
+        if col_kfm:
+            df_b5_base[col_kfm] = df_b5_base[col_kfm].fillna('Không có phản hồi').replace('', 'Không có phản hồi')
+            groupby_cols.append(col_kfm)
+        
+        df_b5 = df_b5_base.groupby(groupby_cols).agg(
             Tổng_số_lượng=('Kho_Rau', lambda x: to_numeric(x).sum()),
             Số_line=('Mã hàng', 'count')
         ).reset_index()
         
         df_b5 = df_b5.sort_values(by='Tổng_số_lượng', ascending=False)
-        df_b5.rename(columns={
+        
+        rename_dict = {
             'Tổng_số_lượng': 'Tổng số lượng',
             'Số_line': 'Số line'
-        }, inplace=True)
+        }
+        if col_kfm and col_kfm != 'KFM phản hồi':
+            rename_dict[col_kfm] = 'KFM phản hồi'
+            
+        df_b5.rename(columns=rename_dict, inplace=True)
         
         format_custom_table_with_total(df_b5, 'DC xác nhận', "Bang_5_Loi_Tra_Kho_Rau")
     else:
