@@ -1083,7 +1083,7 @@ with tab_main:
     st.subheader("Bảng 6: Đánh giá LỖI TRẢ VỀ KHO RAU (Theo DC Xác Nhận)")
     st.markdown("Báo cáo số lượng trả về Kho Rau (Từ cột P) dựa trên cột DC xác nhận (AB) và cột Lỗi (V).")
     
-    df_b6_base = df_week[to_numeric(df_week['Kho_Rau']) > 0].copy()
+    df_b6_base = df_active[to_numeric(df_active['Kho_Rau']) > 0].copy()
     if not df_b6_base.empty:
         if 'DC xác nhận' not in df_b6_base.columns:
             df_b6_base['DC xác nhận'] = 'N/A'
