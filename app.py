@@ -418,11 +418,15 @@ def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date
 def render_dc_feedback_progress_report(df, tab_id=""):
     st.write("---")
     
-    # Sửa lỗi bộ lọc (Sử dụng Qty_P thay vì to_numeric trực tiếp để tránh lỗi chuỗi)
-    if 'Qty_P' in df.columns:
-        df_dc = df[df['Qty_P'] > 0].copy()
+    # Lọc chỉ lấy các dòng có lý do KHO RAU ở cột Y và có số lượng chênh lệch
+    if 'Kho_Rau' in df.columns:
+        df_dc = df[to_numeric(df['Kho_Rau']) > 0].copy()
     else:
-        df_dc = df[to_numeric(df['SL chênh lệch CXD']) > 0].copy()
+        # Fallback nếu cột Kho_Rau chưa được tạo
+        df_dc = df[df.get('Qty_P', to_numeric(df['SL chênh lệch CXD'])) > 0].copy()
+        col_y_name = 'Kho rau\nChưa xác định' if 'Kho rau\nChưa xác định' in df.columns else ('Kho rau Chưa xác định' if 'Kho rau Chưa xác định' in df.columns else None)
+        if col_y_name:
+            df_dc = df_dc[df_dc[col_y_name].astype(str).str.lower().str.contains('kho rau', na=False)]
         
     if df_dc.empty:
         st.info("Không có dữ liệu tiến độ DC phản hồi trong kỳ báo cáo này.")
@@ -445,8 +449,12 @@ def render_dc_feedback_progress_report(df, tab_id=""):
     else:
         df_dc['Chi_Tiet_Loi'] = 'Không ghi chú'
         
-    df_dc['SL_CXD'] = pd.to_numeric(df_dc['SL chênh lệch CXD'], errors='coerce').fillna(0)
-    df_dc['GT_CXD'] = pd.to_numeric(df_dc['Tổng chưa xác định'], errors='coerce').fillna(0) + pd.to_numeric(df_dc.get('Tổng kho rau', 0), errors='coerce').fillna(0)
+    if 'Kho_Rau' in df_dc.columns:
+        df_dc['SL_CXD'] = to_numeric(df_dc['Kho_Rau'])
+        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', 0))
+    else:
+        df_dc['SL_CXD'] = df_dc['Qty_P'] if 'Qty_P' in df_dc.columns else to_numeric(df_dc['SL chênh lệch CXD'])
+        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', 0))
     
     # Tính toán Metrics
     df_chua_xn = df_dc[df_dc['DC_Xac_Nhan'] == 'Chưa xác nhận']
@@ -471,7 +479,7 @@ def render_dc_feedback_progress_report(df, tab_id=""):
     # Hiển thị Metrics
     col1, col2 = st.columns(2)
     with col1:
-        st.metric(label="🔴 Tổng chờ DC xác nhận", value=f"{int(tong_chua_xn)} item", delta=f"- {format_vn(tong_gt_chua_xn)} VNĐ", delta_color="inverse")
+        st.metric(label="🔴 Tổng chờ DC xác nhận", value=f"{int(tong_chua_xn)} item", delta=f"{format_vn(tong_gt_chua_xn)} VNĐ", delta_color="off")
     with col2:
         st.metric(label="🔥 Top 1 Lỗi chờ phản hồi", value=top_loi_name)
     
