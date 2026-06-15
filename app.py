@@ -417,9 +417,13 @@ def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date
 
 def render_dc_feedback_progress_report(df, tab_id=""):
     st.write("---")
-    st.subheader(f"📋 TIẾN ĐỘ DC PHẢN HỒI")
     
-    df_dc = df[pd.to_numeric(df['SL chênh lệch CXD'], errors='coerce').fillna(0) > 0].copy()
+    # Sửa lỗi bộ lọc (Sử dụng Qty_P thay vì to_numeric trực tiếp để tránh lỗi chuỗi)
+    if 'Qty_P' in df.columns:
+        df_dc = df[df['Qty_P'] > 0].copy()
+    else:
+        df_dc = df[to_numeric(df['SL chênh lệch CXD']) > 0].copy()
+        
     if df_dc.empty:
         st.info("Không có dữ liệu tiến độ DC phản hồi trong kỳ báo cáo này.")
         return
@@ -467,54 +471,42 @@ def render_dc_feedback_progress_report(df, tab_id=""):
     # Hiển thị Metrics
     col1, col2 = st.columns(2)
     with col1:
-        st.metric(label="🔴 Tổng chờ DC xác nhận", value=f"{int(tong_chua_xn)} item", delta=f"{format_vn(tong_gt_chua_xn)} VNĐ", delta_color="off")
+        st.metric(label="🔴 Tổng chờ DC xác nhận", value=f"{int(tong_chua_xn)} item", delta=f"- {format_vn(tong_gt_chua_xn)} VNĐ", delta_color="inverse")
     with col2:
         st.metric(label="🔥 Top 1 Lỗi chờ phản hồi", value=top_loi_name)
     
-    st.write("### 📌 Bảng chi tiết")
+    st.write("### 📌 Bảng chi tiết (Tiến độ DC)")
     tab_ngay, tab_loi = st.tabs(["📅 Góc nhìn 1: Theo Ngày", "⚠️ Góc nhìn 2: Theo Nhóm Lỗi"])
     
     # Góc nhìn 1
     with tab_ngay:
-        t_ngay_sl, t_ngay_gt = st.tabs(["📊 Số lượng", "💰 Giá trị"])
-        with t_ngay_sl:
-            pivot_ngay = pd.pivot_table(df_dc, values='SL_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
-            pivot_ngay['Tổng SL'] = pivot_ngay.sum(axis=1)
-            pivot_ngay = pivot_ngay.reset_index()
-            
-            if 'Chưa xác nhận' in pivot_ngay.columns:
-                styled_ngay = pivot_ngay.style.format(precision=0).background_gradient(cmap='Oranges', subset=['Chưa xác nhận'])
-            else:
-                styled_ngay = pivot_ngay.style.format(precision=0)
-            display_df_with_download(styled_ngay, f"Tien_Do_DC_Theo_Ngay_SL_{tab_id}", height=400)
-            
-        with t_ngay_gt:
-            pivot_ngay_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
-            pivot_ngay_gt['Tổng GT'] = pivot_ngay_gt.sum(axis=1)
-            pivot_ngay_gt = pivot_ngay_gt.reset_index()
-            styled_ngay_gt = pivot_ngay_gt.style.format(format_vn)
-            display_df_with_download(styled_ngay_gt, f"Tien_Do_DC_Theo_Ngay_GT_{tab_id}", height=400)
+        st.markdown("**1. Bảng Số Lượng (Item)**")
+        pivot_ngay = pd.pivot_table(df_dc, values='SL_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
+        pivot_ngay['Tổng SL'] = pivot_ngay.sum(axis=1)
+        pivot_ngay = pivot_ngay.reset_index().rename(columns={'Ngày_str': 'Ngày chuyển hàng'})
+        format_custom_table_with_total(pivot_ngay, 'Ngày chuyển hàng', f"Tien_Do_DC_Theo_Ngay_SL_{tab_id}")
+        
+        st.markdown("**2. Bảng Giá Trị (VNĐ)**")
+        pivot_ngay_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
+        pivot_ngay_gt['Tổng GT'] = pivot_ngay_gt.sum(axis=1)
+        pivot_ngay_gt = pivot_ngay_gt.reset_index().rename(columns={'Ngày_str': 'Ngày chuyển hàng'})
+        format_custom_table_with_total(pivot_ngay_gt, 'Ngày chuyển hàng', f"Tien_Do_DC_Theo_Ngay_GT_{tab_id}")
         
     # Góc nhìn 2
     with tab_loi:
-        t_loi_sl, t_loi_gt = st.tabs(["📊 Số lượng", "💰 Giá trị"])
-        with t_loi_sl:
-            pivot_loi = pd.pivot_table(df_dc, values='SL_CXD', index=['Nhom_Loi', 'Chi_Tiet_Loi'], columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
-            pivot_loi['Tổng SL'] = pivot_loi.sum(axis=1)
-            pivot_loi = pivot_loi.sort_values(by='Tổng SL', ascending=False).reset_index()
-            
-            if 'Chưa xác nhận' in pivot_loi.columns:
-                styled_loi = pivot_loi.style.format(precision=0).background_gradient(cmap='Oranges', subset=['Chưa xác nhận'])
-            else:
-                styled_loi = pivot_loi.style.format(precision=0)
-            display_df_with_download(styled_loi, f"Tien_Do_DC_Theo_Loi_SL_{tab_id}", height=400)
-            
-        with t_loi_gt:
-            pivot_loi_gt = pd.pivot_table(df_dc, values='GT_CXD', index=['Nhom_Loi', 'Chi_Tiet_Loi'], columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
-            pivot_loi_gt['Tổng GT'] = pivot_loi_gt.sum(axis=1)
-            pivot_loi_gt = pivot_loi_gt.sort_values(by='Tổng GT', ascending=False).reset_index()
-            styled_loi_gt = pivot_loi_gt.style.format(format_vn)
-            display_df_with_download(styled_loi_gt, f"Tien_Do_DC_Theo_Loi_GT_{tab_id}", height=400)
+        df_dc['Nhóm Lỗi & Chi tiết'] = df_dc['Nhom_Loi'] + " | " + df_dc['Chi_Tiet_Loi']
+        
+        st.markdown("**1. Bảng Số Lượng (Item)**")
+        pivot_loi = pd.pivot_table(df_dc, values='SL_CXD', index='Nhóm Lỗi & Chi tiết', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
+        pivot_loi['Tổng SL'] = pivot_loi.sum(axis=1)
+        pivot_loi = pivot_loi.sort_values(by='Tổng SL', ascending=False).reset_index()
+        format_custom_table_with_total(pivot_loi, 'Nhóm Lỗi & Chi tiết', f"Tien_Do_DC_Theo_Loi_SL_{tab_id}")
+        
+        st.markdown("**2. Bảng Giá Trị (VNĐ)**")
+        pivot_loi_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Nhóm Lỗi & Chi tiết', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
+        pivot_loi_gt['Tổng GT'] = pivot_loi_gt.sum(axis=1)
+        pivot_loi_gt = pivot_loi_gt.sort_values(by='Tổng GT', ascending=False).reset_index()
+        format_custom_table_with_total(pivot_loi_gt, 'Nhóm Lỗi & Chi tiết', f"Tien_Do_DC_Theo_Loi_GT_{tab_id}")
 
 # ==========================================
 # GIAO DIỆN CHIA TAB
