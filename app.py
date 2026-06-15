@@ -503,6 +503,9 @@ def render_dc_feedback_progress_report(df, tab_id=""):
         final_ngay = final_ngay[[c for c in col_order if c in final_ngay.columns]]
         
         # Thêm cột % Tiến độ
+        final_ngay['% Chưa xác nhận'] = final_ngay.apply(
+            lambda r: f"{(r.get('Chưa xác nhận', 0) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "0,00%", axis=1
+        )
         final_ngay['% Tiến độ phản hồi'] = final_ngay.apply(
             lambda r: f"{((r['SL KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "100,00%", axis=1
         )
@@ -522,6 +525,9 @@ def render_dc_feedback_progress_report(df, tab_id=""):
         col_order_gt = ['Ngày_str', 'GT_chuyen', 'GT_chenh_lech', 'GT KHO RAU'] + sorted_dc_cols
         final_ngay_gt = final_ngay_gt[[c for c in col_order_gt if c in final_ngay_gt.columns]]
         
+        final_ngay_gt['% Chưa xác nhận'] = final_ngay_gt.apply(
+            lambda r: f"{(r.get('Chưa xác nhận', 0) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "0,00%", axis=1
+        )
         final_ngay_gt['% Tiến độ phản hồi'] = final_ngay_gt.apply(
             lambda r: f"{((r['GT KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "100,00%", axis=1
         )
@@ -543,6 +549,9 @@ def render_dc_feedback_progress_report(df, tab_id=""):
         col_order_loi = ['Nhóm Lỗi & Chi tiết', 'SL KHO RAU'] + sorted_dc_cols
         pivot_loi = pivot_loi[[c for c in col_order_loi if c in pivot_loi.columns]]
         
+        pivot_loi['% Chưa xác nhận'] = pivot_loi.apply(
+            lambda r: f"{(r.get('Chưa xác nhận', 0) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "0,00%", axis=1
+        )
         pivot_loi['% Tiến độ phản hồi'] = pivot_loi.apply(
             lambda r: f"{((r['SL KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "100,00%", axis=1
         )
@@ -555,6 +564,9 @@ def render_dc_feedback_progress_report(df, tab_id=""):
         pivot_loi_gt = pivot_loi_gt[[c for c in col_order_loi if c in pivot_loi_gt.columns]]
         pivot_loi_gt.rename(columns={'SL KHO RAU': 'GT KHO RAU'}, inplace=True) # Sửa lại tên cột vì dùng chung order list
         
+        pivot_loi_gt['% Chưa xác nhận'] = pivot_loi_gt.apply(
+            lambda r: f"{(r.get('Chưa xác nhận', 0) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "0,00%", axis=1
+        )
         pivot_loi_gt['% Tiến độ phản hồi'] = pivot_loi_gt.apply(
             lambda r: f"{((r['GT KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "100,00%", axis=1
         )
