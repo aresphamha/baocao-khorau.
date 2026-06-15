@@ -418,6 +418,14 @@ def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date
 def render_dc_feedback_progress_report(df, tab_id=""):
     st.write("---")
     
+    # Chỉ lấy dữ liệu từ ngày 27/05/2026 trở đi theo yêu cầu
+    if 'Ngày' in df.columns:
+        df = df[df['Ngày'] >= pd.to_datetime('2026-05-27')]
+        
+    if df.empty:
+        st.info("Không có dữ liệu tiến độ DC phản hồi từ ngày 27/05 trở đi.")
+        return
+        
     # Tính toán daily summary (Toàn hệ thống)
     df['GT_chuyen_temp'] = to_numeric(df.get('Số lượng chuyển', pd.Series(0, index=df.index))) * to_numeric(df.get('Giá trị ĐV', pd.Series(0, index=df.index)))
     daily_summary = df.groupby('Ngày_str').agg(
