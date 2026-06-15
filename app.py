@@ -418,43 +418,42 @@ def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date
 def render_dc_feedback_progress_report(df, tab_id=""):
     st.write("---")
     
-    # Lọc chỉ lấy các dòng có lý do KHO RAU ở cột Y và có số lượng chênh lệch
-    if 'Kho_Rau' in df.columns:
-        df_dc = df[to_numeric(df['Kho_Rau']) > 0].copy()
+    # Tính toán daily summary (Toàn hệ thống)
+    df['GT_chuyen_temp'] = to_numeric(df.get('Số lượng chuyển', 0)) * to_numeric(df.get('Giá trị ĐV', 0))
+    daily_summary = df.groupby('Ngày_str').agg(
+        SL_chuyen=('Số lượng chuyển', lambda x: to_numeric(x).sum()),
+        SL_chenh_lech=('Chênh lệch', lambda x: to_numeric(x).sum()),
+        GT_chuyen=('GT_chuyen_temp', 'sum'),
+        GT_chenh_lech=('Tổng GT', lambda x: to_numeric(x).sum())
+    ).reset_index()
+
+    # Lọc chỉ lấy các dòng có lý do KHO RAU ở cột Y (Bao gồm P và N)
+    col_y_name = 'Kho rau\nChưa xác định' if 'Kho rau\nChưa xác định' in df.columns else ('Kho rau Chưa xác định' if 'Kho rau Chưa xác định' in df.columns else None)
+    if col_y_name:
+        is_kho_rau = df[col_y_name].astype(str).str.lower().str.contains('kho rau', na=False)
+        qty_p = df.get('Qty_P', to_numeric(df.get('SL chênh lệch CXD', 0)))
+        qty_n = df.get('Qty_N', to_numeric(df.get('Hạo hụt tự nhiên', 0)))
+        df_dc = df[is_kho_rau & ((qty_p > 0) | (qty_n > 0))].copy()
+        df_dc['SL_CXD'] = qty_p + qty_n
+        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', 0)) + to_numeric(df_dc.get('Tổng hao hụt', 0))
     else:
-        # Fallback nếu cột Kho_Rau chưa được tạo
-        df_dc = df[df.get('Qty_P', to_numeric(df['SL chênh lệch CXD'])) > 0].copy()
-        col_y_name = 'Kho rau\nChưa xác định' if 'Kho rau\nChưa xác định' in df.columns else ('Kho rau Chưa xác định' if 'Kho rau Chưa xác định' in df.columns else None)
-        if col_y_name:
-            df_dc = df_dc[df_dc[col_y_name].astype(str).str.lower().str.contains('kho rau', na=False)]
+        df_dc = df[to_numeric(df['Kho_Rau']) > 0].copy()
+        df_dc['SL_CXD'] = to_numeric(df_dc['Kho_Rau'])
+        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', 0))
         
     if df_dc.empty:
         st.info("Không có dữ liệu tiến độ DC phản hồi trong kỳ báo cáo này.")
         return
         
-    # Làm sạch dữ liệu
-    df_dc['DC_Xac_Nhan'] = df_dc['DC xác nhận'].fillna('Chưa xác nhận').replace('', 'Chưa xác nhận')
+    # Làm sạch dữ liệu và xử lý các ô trống/dấu cách
+    df_dc['DC_Xac_Nhan'] = df_dc['DC xác nhận'].fillna('Chưa xác nhận')
+    df_dc['DC_Xac_Nhan'] = df_dc['DC_Xac_Nhan'].apply(lambda x: 'Chưa xác nhận' if str(x).strip() == '' else x)
     df_dc['Nhom_Loi'] = df_dc['Lỗi'].fillna('Không phân loại').replace('', 'Không phân loại')
     
-    # Xử lý cột Kho rau - Chưa xác định
-    if 'Kho rau\nChưa xác định' in df_dc.columns:
-        col_y_name = 'Kho rau\nChưa xác định'
-    elif 'Kho rau Chưa xác định' in df_dc.columns:
-        col_y_name = 'Kho rau Chưa xác định'
-    else:
-        col_y_name = None
-        
     if col_y_name:
         df_dc['Chi_Tiet_Loi'] = df_dc[col_y_name].fillna('Không ghi chú').replace('', 'Không ghi chú')
     else:
         df_dc['Chi_Tiet_Loi'] = 'Không ghi chú'
-        
-    if 'Kho_Rau' in df_dc.columns:
-        df_dc['SL_CXD'] = to_numeric(df_dc['Kho_Rau'])
-        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', 0))
-    else:
-        df_dc['SL_CXD'] = df_dc['Qty_P'] if 'Qty_P' in df_dc.columns else to_numeric(df_dc['SL chênh lệch CXD'])
-        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', 0))
     
     # Tính toán Metrics
     df_chua_xn = df_dc[df_dc['DC_Xac_Nhan'] == 'Chưa xác nhận']
@@ -489,31 +488,77 @@ def render_dc_feedback_progress_report(df, tab_id=""):
     # Góc nhìn 1
     with tab_ngay:
         st.markdown("**1. Bảng Số Lượng (Item)**")
-        pivot_ngay = pd.pivot_table(df_dc, values='SL_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
-        pivot_ngay['Tổng SL'] = pivot_ngay.sum(axis=1)
-        pivot_ngay = pivot_ngay.reset_index().rename(columns={'Ngày_str': 'Ngày chuyển hàng'})
-        format_custom_table_with_total(pivot_ngay, 'Ngày chuyển hàng', f"Tien_Do_DC_Theo_Ngay_SL_{tab_id}")
+        pivot_ngay = pd.pivot_table(df_dc, values='SL_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0).reset_index()
+        dc_cols = [c for c in pivot_ngay.columns if c != 'Ngày_str']
+        pivot_ngay['SL KHO RAU'] = pivot_ngay[dc_cols].sum(axis=1)
+        
+        # Merge và sắp xếp cột
+        final_ngay = pd.merge(daily_summary[['Ngày_str', 'SL_chuyen', 'SL_chenh_lech']], pivot_ngay, on='Ngày_str', how='right')
+        sorted_dc_cols = [c for c in dc_cols if c != 'Chưa xác nhận']
+        sorted_dc_cols.sort()
+        if 'Chưa xác nhận' in dc_cols:
+            sorted_dc_cols = ['Chưa xác nhận'] + sorted_dc_cols
+            
+        col_order = ['Ngày_str', 'SL_chuyen', 'SL_chenh_lech', 'SL KHO RAU'] + sorted_dc_cols
+        final_ngay = final_ngay[[c for c in col_order if c in final_ngay.columns]]
+        
+        # Thêm cột % Tiến độ
+        final_ngay['% Tiến độ phản hồi'] = final_ngay.apply(
+            lambda r: f"{((r['SL KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "100,00%", axis=1
+        )
+        
+        final_ngay.rename(columns={
+            'Ngày_str': 'Ngày chuyển hàng',
+            'SL_chuyen': 'SL chuyển',
+            'SL_chenh_lech': 'SL chênh lệch'
+        }, inplace=True)
+        format_custom_table_with_total(final_ngay, 'Ngày chuyển hàng', f"Tien_Do_DC_Theo_Ngay_SL_{tab_id}")
         
         st.markdown("**2. Bảng Giá Trị (VNĐ)**")
-        pivot_ngay_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
-        pivot_ngay_gt['Tổng GT'] = pivot_ngay_gt.sum(axis=1)
-        pivot_ngay_gt = pivot_ngay_gt.reset_index().rename(columns={'Ngày_str': 'Ngày chuyển hàng'})
-        format_custom_table_with_total(pivot_ngay_gt, 'Ngày chuyển hàng', f"Tien_Do_DC_Theo_Ngay_GT_{tab_id}")
+        pivot_ngay_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0).reset_index()
+        pivot_ngay_gt['GT KHO RAU'] = pivot_ngay_gt[dc_cols].sum(axis=1)
+        final_ngay_gt = pd.merge(daily_summary[['Ngày_str', 'GT_chuyen', 'GT_chenh_lech']], pivot_ngay_gt, on='Ngày_str', how='right')
+        
+        col_order_gt = ['Ngày_str', 'GT_chuyen', 'GT_chenh_lech', 'GT KHO RAU'] + sorted_dc_cols
+        final_ngay_gt = final_ngay_gt[[c for c in col_order_gt if c in final_ngay_gt.columns]]
+        
+        final_ngay_gt['% Tiến độ phản hồi'] = final_ngay_gt.apply(
+            lambda r: f"{((r['GT KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "100,00%", axis=1
+        )
+        
+        final_ngay_gt.rename(columns={
+            'Ngày_str': 'Ngày chuyển hàng',
+            'GT_chuyen': 'GT chuyển (VNĐ)',
+            'GT_chenh_lech': 'GT chênh lệch (VNĐ)'
+        }, inplace=True)
+        format_custom_table_with_total(final_ngay_gt, 'Ngày chuyển hàng', f"Tien_Do_DC_Theo_Ngay_GT_{tab_id}")
         
     # Góc nhìn 2
     with tab_loi:
         df_dc['Nhóm Lỗi & Chi tiết'] = df_dc['Nhom_Loi'] + " | " + df_dc['Chi_Tiet_Loi']
         
         st.markdown("**1. Bảng Số Lượng (Item)**")
-        pivot_loi = pd.pivot_table(df_dc, values='SL_CXD', index='Nhóm Lỗi & Chi tiết', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
-        pivot_loi['Tổng SL'] = pivot_loi.sum(axis=1)
-        pivot_loi = pivot_loi.sort_values(by='Tổng SL', ascending=False).reset_index()
+        pivot_loi = pd.pivot_table(df_dc, values='SL_CXD', index='Nhóm Lỗi & Chi tiết', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0).reset_index()
+        pivot_loi['SL KHO RAU'] = pivot_loi[dc_cols].sum(axis=1)
+        col_order_loi = ['Nhóm Lỗi & Chi tiết', 'SL KHO RAU'] + sorted_dc_cols
+        pivot_loi = pivot_loi[[c for c in col_order_loi if c in pivot_loi.columns]]
+        
+        pivot_loi['% Tiến độ phản hồi'] = pivot_loi.apply(
+            lambda r: f"{((r['SL KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "100,00%", axis=1
+        )
+        
         format_custom_table_with_total(pivot_loi, 'Nhóm Lỗi & Chi tiết', f"Tien_Do_DC_Theo_Loi_SL_{tab_id}")
         
         st.markdown("**2. Bảng Giá Trị (VNĐ)**")
-        pivot_loi_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Nhóm Lỗi & Chi tiết', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0)
-        pivot_loi_gt['Tổng GT'] = pivot_loi_gt.sum(axis=1)
-        pivot_loi_gt = pivot_loi_gt.sort_values(by='Tổng GT', ascending=False).reset_index()
+        pivot_loi_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Nhóm Lỗi & Chi tiết', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0).reset_index()
+        pivot_loi_gt['GT KHO RAU'] = pivot_loi_gt[dc_cols].sum(axis=1)
+        pivot_loi_gt = pivot_loi_gt[[c for c in col_order_loi if c in pivot_loi_gt.columns]]
+        pivot_loi_gt.rename(columns={'SL KHO RAU': 'GT KHO RAU'}, inplace=True) # Sửa lại tên cột vì dùng chung order list
+        
+        pivot_loi_gt['% Tiến độ phản hồi'] = pivot_loi_gt.apply(
+            lambda r: f"{((r['GT KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "100,00%", axis=1
+        )
+        
         format_custom_table_with_total(pivot_loi_gt, 'Nhóm Lỗi & Chi tiết', f"Tien_Do_DC_Theo_Loi_GT_{tab_id}")
 
 # ==========================================
