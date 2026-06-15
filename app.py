@@ -419,7 +419,7 @@ def render_dc_feedback_progress_report(df, tab_id=""):
     st.write("---")
     
     # Tính toán daily summary (Toàn hệ thống)
-    df['GT_chuyen_temp'] = to_numeric(df.get('Số lượng chuyển', 0)) * to_numeric(df.get('Giá trị ĐV', 0))
+    df['GT_chuyen_temp'] = to_numeric(df.get('Số lượng chuyển', pd.Series(0, index=df.index))) * to_numeric(df.get('Giá trị ĐV', pd.Series(0, index=df.index)))
     daily_summary = df.groupby('Ngày_str').agg(
         SL_chuyen=('Số lượng chuyển', lambda x: to_numeric(x).sum()),
         SL_chenh_lech=('Chênh lệch', lambda x: to_numeric(x).sum()),
@@ -431,15 +431,15 @@ def render_dc_feedback_progress_report(df, tab_id=""):
     col_y_name = 'Kho rau\nChưa xác định' if 'Kho rau\nChưa xác định' in df.columns else ('Kho rau Chưa xác định' if 'Kho rau Chưa xác định' in df.columns else None)
     if col_y_name:
         is_kho_rau = df[col_y_name].astype(str).str.lower().str.contains('kho rau', na=False)
-        qty_p = df.get('Qty_P', to_numeric(df.get('SL chênh lệch CXD', 0)))
-        qty_n = df.get('Qty_N', to_numeric(df.get('Hạo hụt tự nhiên', 0)))
+        qty_p = df.get('Qty_P', to_numeric(df.get('SL chênh lệch CXD', pd.Series(0, index=df.index))))
+        qty_n = df.get('Qty_N', to_numeric(df.get('Hạo hụt tự nhiên', pd.Series(0, index=df.index))))
         df_dc = df[is_kho_rau & ((qty_p > 0) | (qty_n > 0))].copy()
         df_dc['SL_CXD'] = qty_p + qty_n
-        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', 0)) + to_numeric(df_dc.get('Tổng hao hụt', 0))
+        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', pd.Series(0, index=df_dc.index))) + to_numeric(df_dc.get('Tổng hao hụt', pd.Series(0, index=df_dc.index)))
     else:
-        df_dc = df[to_numeric(df['Kho_Rau']) > 0].copy()
-        df_dc['SL_CXD'] = to_numeric(df_dc['Kho_Rau'])
-        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', 0))
+        df_dc = df[to_numeric(df.get('Kho_Rau', pd.Series(0, index=df.index))) > 0].copy()
+        df_dc['SL_CXD'] = to_numeric(df_dc.get('Kho_Rau', pd.Series(0, index=df_dc.index)))
+        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', pd.Series(0, index=df_dc.index)))
         
     if df_dc.empty:
         st.info("Không có dữ liệu tiến độ DC phản hồi trong kỳ báo cáo này.")
