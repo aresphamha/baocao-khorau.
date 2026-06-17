@@ -102,13 +102,19 @@ def load_data():
     df_apr.rename(columns={
         'ST': 'ID ST',
         'SL chênh lệch ĐXL': 'SL chênh lệch CXD',
-        'SLbổ sung cho ST': 'SL trả tồn về ST'
+        'SLbổ sung cho ST': 'SL trả tồn về ST',
+        'CLv2': 'CLV2'
+    }, inplace=True)
+    
+    df_may.rename(columns={
+        'CLv2': 'CLV2'
     }, inplace=True)
     
     df_jun.rename(columns={
         'ST': 'ID ST',
         'SL chênh lệch ĐXL': 'SL chênh lệch CXD',
-        'SLbổ sung cho ST': 'SL trả tồn về ST'
+        'SLbổ sung cho ST': 'SL trả tồn về ST',
+        'CLv2': 'CLV2'
     }, inplace=True)
     
     # Loại trừ các ngày của tháng 5 trong sheet tháng 6
@@ -415,176 +421,10 @@ def generate_insights(df_raw, table_type, df_grouped=None, df_metrics=None, date
         
     return ""
 
-def render_dc_feedback_progress_report(df, tab_id=""):
-    st.write("---")
-    
-    # Chỉ lấy dữ liệu từ ngày 27/05/2026 trở đi theo yêu cầu
-    if 'Ngày' in df.columns:
-        df = df[df['Ngày'] >= pd.to_datetime('2026-05-27')]
-        
-    if df.empty:
-        st.info("Không có dữ liệu tiến độ DC phản hồi từ ngày 27/05 trở đi.")
-        return
-        
-    # Tính toán daily summary (Toàn hệ thống)
-    df['GT_chuyen_temp'] = to_numeric(df.get('Số lượng chuyển', pd.Series(0, index=df.index))) * to_numeric(df.get('Giá trị ĐV', pd.Series(0, index=df.index)))
-    daily_summary = df.groupby('Ngày_str').agg(
-        SL_chuyen=('Số lượng chuyển', lambda x: to_numeric(x).sum()),
-        SL_chenh_lech=('Chênh lệch', lambda x: to_numeric(x).sum()),
-        GT_chuyen=('GT_chuyen_temp', 'sum'),
-        GT_chenh_lech=('Tổng GT', lambda x: to_numeric(x).sum())
-    ).reset_index()
-
-    # Lọc chỉ lấy các dòng có lý do KHO RAU ở cột Y (Bao gồm P và N)
-    col_y_name = 'Kho rau\nChưa xác định' if 'Kho rau\nChưa xác định' in df.columns else ('Kho rau Chưa xác định' if 'Kho rau Chưa xác định' in df.columns else None)
-    if col_y_name:
-        is_kho_rau = df[col_y_name].astype(str).str.lower().str.contains('kho rau', na=False)
-        qty_p = df.get('Qty_P', to_numeric(df.get('SL chênh lệch CXD', pd.Series(0, index=df.index))))
-        qty_n = df.get('Qty_N', to_numeric(df.get('Hạo hụt tự nhiên', pd.Series(0, index=df.index))))
-        df_dc = df[is_kho_rau & ((qty_p > 0) | (qty_n > 0))].copy()
-        df_dc['SL_CXD'] = qty_p + qty_n
-        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', pd.Series(0, index=df_dc.index))) + to_numeric(df_dc.get('Tổng hao hụt', pd.Series(0, index=df_dc.index)))
-    else:
-        df_dc = df[to_numeric(df.get('Kho_Rau', pd.Series(0, index=df.index))) > 0].copy()
-        df_dc['SL_CXD'] = to_numeric(df_dc.get('Kho_Rau', pd.Series(0, index=df_dc.index)))
-        df_dc['GT_CXD'] = to_numeric(df_dc.get('Tổng kho rau', pd.Series(0, index=df_dc.index)))
-        
-    if df_dc.empty:
-        st.info("Không có dữ liệu tiến độ DC phản hồi trong kỳ báo cáo này.")
-        return
-        
-    # Làm sạch dữ liệu và xử lý các ô trống/dấu cách
-    df_dc['DC_Xac_Nhan'] = df_dc['DC xác nhận'].fillna('Chưa xác nhận')
-    df_dc['DC_Xac_Nhan'] = df_dc['DC_Xac_Nhan'].apply(lambda x: 'Chưa xác nhận' if str(x).strip() == '' else x)
-    df_dc['Nhom_Loi'] = df_dc['Lỗi'].fillna('Không phân loại').replace('', 'Không phân loại')
-    
-    if col_y_name:
-        df_dc['Chi_Tiet_Loi'] = df_dc[col_y_name].fillna('Không ghi chú').replace('', 'Không ghi chú')
-    else:
-        df_dc['Chi_Tiet_Loi'] = 'Không ghi chú'
-    
-    # Tính toán Metrics
-    df_chua_xn = df_dc[df_dc['DC_Xac_Nhan'] == 'Chưa xác nhận']
-    tong_chua_xn = df_chua_xn['SL_CXD'].sum()
-    tong_gt_chua_xn = df_chua_xn['GT_CXD'].sum()
-    
-    top_loi_name = "Không có"
-    if not df_chua_xn.empty:
-        loi_sum = df_chua_xn.groupby('Nhom_Loi')['SL_CXD'].sum()
-        if not loi_sum.empty and loi_sum.max() > 0:
-            top_loi_name = f"{loi_sum.idxmax()} ({int(loi_sum.max())} item)"
-            
-    def format_vn(val):
-        if pd.isna(val): return ""
-        if isinstance(val, (int, float)):
-            if val == int(val): return f"{int(val):,}".replace(',', '.')
-            else:
-                formatted = f"{val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-                return formatted[:-3] if formatted.endswith(',00') else formatted
-        return val
-    
-    # Hiển thị Metrics
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric(label="🔴 Tổng chờ DC xác nhận", value=f"{int(tong_chua_xn)} item", delta=f"{format_vn(tong_gt_chua_xn)} VNĐ", delta_color="off")
-    with col2:
-        st.metric(label="🔥 Top 1 Lỗi chờ phản hồi", value=top_loi_name)
-    
-    st.write("### 📌 Bảng chi tiết (Tiến độ DC)")
-    tab_ngay, tab_loi = st.tabs(["📅 Góc nhìn 1: Theo Ngày", "⚠️ Góc nhìn 2: Theo Nhóm Lỗi"])
-    
-    # Góc nhìn 1
-    with tab_ngay:
-        st.markdown("**1. Bảng Số Lượng (Item)**")
-        pivot_ngay = pd.pivot_table(df_dc, values='SL_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0).reset_index()
-        dc_cols = [c for c in pivot_ngay.columns if c != 'Ngày_str']
-        pivot_ngay['SL KHO RAU'] = pivot_ngay[dc_cols].sum(axis=1)
-        
-        # Merge và sắp xếp cột
-        final_ngay = pd.merge(daily_summary[['Ngày_str', 'SL_chuyen', 'SL_chenh_lech']], pivot_ngay, on='Ngày_str', how='right')
-        sorted_dc_cols = [c for c in dc_cols if c != 'Chưa xác nhận']
-        sorted_dc_cols.sort()
-        if 'Chưa xác nhận' in dc_cols:
-            sorted_dc_cols = ['Chưa xác nhận'] + sorted_dc_cols
-            
-        col_order = ['Ngày_str', 'SL_chuyen', 'SL_chenh_lech', 'SL KHO RAU'] + sorted_dc_cols
-        final_ngay = final_ngay[[c for c in col_order if c in final_ngay.columns]]
-        
-        # Thêm cột % Tiến độ
-        final_ngay['% Chưa xác nhận'] = final_ngay.apply(
-            lambda r: f"{(r.get('Chưa xác nhận', 0) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "0,00%", axis=1
-        )
-        final_ngay['% Tiến độ phản hồi'] = final_ngay.apply(
-            lambda r: f"{((r['SL KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "100,00%", axis=1
-        )
-        
-        final_ngay.rename(columns={
-            'Ngày_str': 'Ngày chuyển hàng',
-            'SL_chuyen': 'SL chuyển',
-            'SL_chenh_lech': 'SL chênh lệch'
-        }, inplace=True)
-        format_custom_table_with_total(final_ngay, 'Ngày chuyển hàng', f"Tien_Do_DC_Theo_Ngay_SL_{tab_id}")
-        
-        st.markdown("**2. Bảng Giá Trị (VNĐ)**")
-        pivot_ngay_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Ngày_str', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0).reset_index()
-        pivot_ngay_gt['GT KHO RAU'] = pivot_ngay_gt[dc_cols].sum(axis=1)
-        final_ngay_gt = pd.merge(daily_summary[['Ngày_str', 'GT_chuyen', 'GT_chenh_lech']], pivot_ngay_gt, on='Ngày_str', how='right')
-        
-        col_order_gt = ['Ngày_str', 'GT_chuyen', 'GT_chenh_lech', 'GT KHO RAU'] + sorted_dc_cols
-        final_ngay_gt = final_ngay_gt[[c for c in col_order_gt if c in final_ngay_gt.columns]]
-        
-        final_ngay_gt['% Chưa xác nhận'] = final_ngay_gt.apply(
-            lambda r: f"{(r.get('Chưa xác nhận', 0) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "0,00%", axis=1
-        )
-        final_ngay_gt['% Tiến độ phản hồi'] = final_ngay_gt.apply(
-            lambda r: f"{((r['GT KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "100,00%", axis=1
-        )
-        
-        final_ngay_gt.rename(columns={
-            'Ngày_str': 'Ngày chuyển hàng',
-            'GT_chuyen': 'GT chuyển (VNĐ)',
-            'GT_chenh_lech': 'GT chênh lệch (VNĐ)'
-        }, inplace=True)
-        format_custom_table_with_total(final_ngay_gt, 'Ngày chuyển hàng', f"Tien_Do_DC_Theo_Ngay_GT_{tab_id}")
-        
-    # Góc nhìn 2
-    with tab_loi:
-        df_dc['Nhóm Lỗi & Chi tiết'] = df_dc['Nhom_Loi'] + " | " + df_dc['Chi_Tiet_Loi']
-        
-        st.markdown("**1. Bảng Số Lượng (Item)**")
-        pivot_loi = pd.pivot_table(df_dc, values='SL_CXD', index='Nhóm Lỗi & Chi tiết', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0).reset_index()
-        pivot_loi['SL KHO RAU'] = pivot_loi[dc_cols].sum(axis=1)
-        col_order_loi = ['Nhóm Lỗi & Chi tiết', 'SL KHO RAU'] + sorted_dc_cols
-        pivot_loi = pivot_loi[[c for c in col_order_loi if c in pivot_loi.columns]]
-        
-        pivot_loi['% Chưa xác nhận'] = pivot_loi.apply(
-            lambda r: f"{(r.get('Chưa xác nhận', 0) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "0,00%", axis=1
-        )
-        pivot_loi['% Tiến độ phản hồi'] = pivot_loi.apply(
-            lambda r: f"{((r['SL KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['SL KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('SL KHO RAU', 0) > 0 else "100,00%", axis=1
-        )
-        
-        format_custom_table_with_total(pivot_loi, 'Nhóm Lỗi & Chi tiết', f"Tien_Do_DC_Theo_Loi_SL_{tab_id}")
-        
-        st.markdown("**2. Bảng Giá Trị (VNĐ)**")
-        pivot_loi_gt = pd.pivot_table(df_dc, values='GT_CXD', index='Nhóm Lỗi & Chi tiết', columns='DC_Xac_Nhan', aggfunc='sum', fill_value=0).reset_index()
-        pivot_loi_gt['GT KHO RAU'] = pivot_loi_gt[dc_cols].sum(axis=1)
-        pivot_loi_gt = pivot_loi_gt[[c for c in col_order_loi if c in pivot_loi_gt.columns]]
-        pivot_loi_gt.rename(columns={'SL KHO RAU': 'GT KHO RAU'}, inplace=True) # Sửa lại tên cột vì dùng chung order list
-        
-        pivot_loi_gt['% Chưa xác nhận'] = pivot_loi_gt.apply(
-            lambda r: f"{(r.get('Chưa xác nhận', 0) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "0,00%", axis=1
-        )
-        pivot_loi_gt['% Tiến độ phản hồi'] = pivot_loi_gt.apply(
-            lambda r: f"{((r['GT KHO RAU'] - r.get('Chưa xác nhận', 0)) / r['GT KHO RAU'] * 100):.2f}%".replace('.', ',') if r.get('GT KHO RAU', 0) > 0 else "100,00%", axis=1
-        )
-        
-        format_custom_table_with_total(pivot_loi_gt, 'Nhóm Lỗi & Chi tiết', f"Tien_Do_DC_Theo_Loi_GT_{tab_id}")
-
 # ==========================================
 # GIAO DIỆN CHIA TAB
 # ==========================================
-tab_main, tab_daily, tab_dc = st.tabs(["📊 Báo Cáo Tổng Quan", "📈 Báo Cáo Năng Suất Daily", "👨‍🔧 Tiến Độ DC Phản Hồi"])
+tab_main, tab_daily = st.tabs(["📊 Báo Cáo Tổng Quan", "📈 Báo Cáo Năng Suất Daily"])
 
 # ==========================================
 # TRANG 1: BÁO CÁO TỔNG QUAN (CODE CŨ)
@@ -1102,6 +942,7 @@ with tab_main:
         "Tất cả các tuần",
         "Nguyên Tháng 4",
         "Nguyên Tháng 5",
+        "Nguyên Tháng 6",
         "Tuần 14 (30.03 - 05.04)",
         "Tuần 15 (06.04 - 12.04)",
         "Tuần 16 (13.04 - 19.04)",
@@ -1110,13 +951,18 @@ with tab_main:
         "Tuần 19 (04.05 - 10.05)",
         "Tuần 20 (11.05 - 17.05)",
         "Tuần 21 (18.05 - 24.05)",
-        "Tuần 22 (25.05 - 31.05)"
+        "Tuần 22 (25.05 - 31.05)",
+        "Tuần 23 (01.06 - 07.06)",
+        "Tuần 24 (08.06 - 14.06)",
+        "Tuần 25 (15.06 - 21.06)",
+        "Tuần 26 (22.06 - 28.06)",
+        "Tuần 27 (29.06 - 05.07)"
     ]
 
     week_filter = st.selectbox("📅 Chọn Tuần:", week_options)
 
     start_date = pd.to_datetime('2026-03-30')
-    end_date = pd.to_datetime('2026-05-31')
+    end_date = pd.to_datetime('2026-06-30')
 
     if week_filter == "Nguyên Tháng 4":
         start_date = pd.to_datetime('2026-04-01')
@@ -1124,6 +970,9 @@ with tab_main:
     elif week_filter == "Nguyên Tháng 5":
         start_date = pd.to_datetime('2026-05-01')
         end_date = pd.to_datetime('2026-05-31')
+    elif week_filter == "Nguyên Tháng 6":
+        start_date = pd.to_datetime('2026-06-01')
+        end_date = pd.to_datetime('2026-06-30')
     elif week_filter != "Tất cả các tuần":
         date_str = week_filter.split('(')[1].split(')')[0]
         start_str, end_str = date_str.split(' - ')
@@ -1217,7 +1066,7 @@ with tab_main:
         # Bảng so sánh từng tuần
         def assign_week(date):
             if pd.isna(date): return None
-            for opt in week_options[3:]: # Start from Tuần 14
+            for opt in week_options[4:]: # Start from Tuần 14
                 date_str = opt.split('(')[1].split(')')[0]
                 start_str, end_str = date_str.split(' - ')
                 s_date = pd.to_datetime(start_str + '.2026', format='%d.%m.%Y')
@@ -1273,6 +1122,54 @@ with tab_main:
 
     else:
         st.info(f"Không có dữ liệu lỗi 'ST nhập thiếu' trong {week_filter}.")
+
+    st.write("---")
+    st.subheader("Bảng 6: Đánh giá LỖI TRẢ VỀ KHO RAU (Theo DC Xác Nhận)")
+    st.markdown("Báo cáo số lượng trả về Kho Rau (Từ cột P) dựa trên cột DC xác nhận (AB) và cột Lỗi (V).")
+    
+    df_b6_base = df_active[to_numeric(df_active['Kho_Rau']) > 0].copy()
+    if not df_b6_base.empty:
+        if 'DC xác nhận' not in df_b6_base.columns:
+            df_b6_base['DC xác nhận'] = 'N/A'
+        if 'Lỗi' not in df_b6_base.columns:
+            df_b6_base['Lỗi'] = 'N/A'
+            
+        col_kfm = 'KFM phản hồi'
+        if col_kfm not in df_b6_base.columns:
+            col_kfm = df_b6_base.columns[29] if len(df_b6_base.columns) > 29 else None
+            
+        df_b6_base['DC xác nhận'] = df_b6_base['DC xác nhận'].fillna('Chưa xác nhận').replace('', 'Chưa xác nhận')
+        df_b6_base['Lỗi'] = df_b6_base['Lỗi'].fillna('Không có ghi chú').replace('', 'Không có ghi chú')
+        
+        groupby_cols = ['DC xác nhận', 'Lỗi']
+        if col_kfm:
+            df_b6_base[col_kfm] = df_b6_base[col_kfm].fillna('Không có phản hồi').replace('', 'Không có phản hồi')
+            groupby_cols.append(col_kfm)
+        
+        df_b6 = df_b6_base.groupby(groupby_cols).agg(
+            Tổng_số_lượng=('Kho_Rau', lambda x: to_numeric(x).sum()),
+            Số_line=('Mã hàng', 'count')
+        ).reset_index()
+        
+        df_b6 = df_b6.sort_values(by='Tổng_số_lượng', ascending=False)
+        
+        rename_dict = {
+            'Tổng_số_lượng': 'Tổng số lượng',
+            'Số_line': 'Số line'
+        }
+        if col_kfm and col_kfm != 'KFM phản hồi':
+            rename_dict[col_kfm] = 'KFM phản hồi'
+            
+        df_b6.rename(columns=rename_dict, inplace=True)
+        
+        format_custom_table_with_total(df_b6, 'DC xác nhận', "Bang_6_Loi_Tra_Kho_Rau")
+    else:
+        st.info("Không có dữ liệu trả về Kho Rau trong kỳ báo cáo này.")
+        df_b6 = pd.DataFrame()
+        
+    nx_b6 = generate_insights(df_b6_base, "Bảng 6", df_b6)
+    st.text_area("Nhận xét Bảng 6:", value=nx_b6, key="nx_b6", height=100)
+
 
 # ==========================================
 # TRANG 2: BÁO CÁO DAILY MỚI
@@ -1853,62 +1750,51 @@ with tab_daily:
     nx_b4 = generate_insights(df_kg_hao_hut, "Bảng 4", df_top_hh)
     st.text_area("Nhận xét Bảng 4:", value=nx_b4, key="nx_b4", height=100)
 
-# ==========================================
-# TRANG 3: TIẾN ĐỘ DC PHẢN HỒI
-# ==========================================
-with tab_dc:
-    st.header("👨‍🔧 Theo Dõi Tiến Độ Xử Lý & Phản Hồi Của DC")
-    st.markdown("Báo cáo dành riêng để Operations theo dõi và đốc thúc DC xử lý các mã hàng chênh lệch/lỗi chưa được giải quyết.")
-    render_dc_feedback_progress_report(df_active, "Tab_3")
-    
     st.write("---")
-    st.subheader("📋 Báo cáo bổ sung: Đánh giá LỖI TRẢ VỀ KHO RAU (Theo DC Xác Nhận)")
+    st.subheader("Bảng 5: Đánh giá LỖI TRẢ VỀ KHO RAU (Theo DC Xác Nhận)")
     st.markdown("Báo cáo số lượng trả về Kho Rau (Từ cột P) dựa trên cột DC xác nhận (AB) và cột Lỗi (V).")
     
-    df_b_dc_base = df_active[to_numeric(df_active['Kho_Rau']) > 0].copy()
-    if not df_b_dc_base.empty:
-        if 'DC xác nhận' not in df_b_dc_base.columns:
-            df_b_dc_base['DC xác nhận'] = 'N/A'
-        if 'Lỗi' not in df_b_dc_base.columns:
-            df_b_dc_base['Lỗi'] = 'N/A'
+    df_b5_base = df_filtered[to_numeric(df_filtered['Kho_Rau']) > 0].copy()
+    if not df_b5_base.empty:
+        if 'DC xác nhận' not in df_b5_base.columns:
+            df_b5_base['DC xác nhận'] = 'N/A'
+        if 'Lỗi' not in df_b5_base.columns:
+            df_b5_base['Lỗi'] = 'N/A'
             
         col_kfm = 'KFM phản hồi'
-        if col_kfm not in df_b_dc_base.columns:
-            col_kfm = df_b_dc_base.columns[29] if len(df_b_dc_base.columns) > 29 else None
+        if col_kfm not in df_b5_base.columns:
+            col_kfm = df_b5_base.columns[29] if len(df_b5_base.columns) > 29 else None
             
-        df_b_dc_base['DC xác nhận'] = df_b_dc_base['DC xác nhận'].fillna('Chưa xác nhận').replace('', 'Chưa xác nhận')
-        df_b_dc_base['Lỗi'] = df_b_dc_base['Lỗi'].fillna('Không có ghi chú').replace('', 'Không có ghi chú')
+        df_b5_base['DC xác nhận'] = df_b5_base['DC xác nhận'].fillna('Chưa xác nhận').replace('', 'Chưa xác nhận')
+        df_b5_base['Lỗi'] = df_b5_base['Lỗi'].fillna('Không có ghi chú').replace('', 'Không có ghi chú')
         
         groupby_cols = ['DC xác nhận', 'Lỗi']
         if col_kfm:
-            df_b_dc_base[col_kfm] = df_b_dc_base[col_kfm].fillna('Không có phản hồi').replace('', 'Không có phản hồi')
+            df_b5_base[col_kfm] = df_b5_base[col_kfm].fillna('Không có phản hồi').replace('', 'Không có phản hồi')
             groupby_cols.append(col_kfm)
         
-        df_b_dc = df_b_dc_base.groupby(groupby_cols).agg(
+        df_b5 = df_b5_base.groupby(groupby_cols).agg(
             Tổng_số_lượng=('Kho_Rau', lambda x: to_numeric(x).sum()),
-            Tổng_giá_trị=('Tổng kho rau', lambda x: to_numeric(x).sum()),
             Số_line=('Mã hàng', 'count')
         ).reset_index()
         
-        df_b_dc = df_b_dc.sort_values(by='Tổng_số_lượng', ascending=False)
+        df_b5 = df_b5.sort_values(by='Tổng_số_lượng', ascending=False)
         
         rename_dict = {
             'Tổng_số_lượng': 'Tổng số lượng',
-            'Tổng_giá_trị': 'Tổng giá trị (VNĐ)',
             'Số_line': 'Số line'
         }
         if col_kfm and col_kfm != 'KFM phản hồi':
             rename_dict[col_kfm] = 'KFM phản hồi'
             
-        df_b_dc.rename(columns=rename_dict, inplace=True)
+        df_b5.rename(columns=rename_dict, inplace=True)
         
-        format_custom_table_with_total(df_b_dc, 'DC xác nhận', "Danh_Gia_Loi_Kho_Rau_Tab_3")
+        format_custom_table_with_total(df_b5, 'DC xác nhận', "Bang_5_Loi_Tra_Kho_Rau")
     else:
         st.info("Không có dữ liệu trả về Kho Rau trong kỳ báo cáo này.")
-        df_b_dc = pd.DataFrame()
+        df_b5 = pd.DataFrame()
         
-    nx_b_dc = generate_insights(df_b_dc_base, "Bảng 6", df_b_dc)
-    st.text_area("Nhận xét Đánh giá Lỗi:", value=nx_b_dc, key="nx_b_dc", height=100)
-
+    nx_b5 = generate_insights(df_b5_base, "Bảng 5", df_b5)
+    st.text_area("Nhận xét Bảng 5:", value=nx_b5, key="nx_b5", height=100)
 
 
