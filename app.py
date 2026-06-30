@@ -1327,34 +1327,23 @@ with tab_daily:
         data['Tổng_CXD_num'] = to_numeric(data['Tổng chưa xác định'])
         
         # Lấy lượng chênh lệch chưa xác định (chưa có hướng xử lý)
-        # Sử dụng cột Xử lý để phân tách Đang xử lý và Chưa xử lý
+        # Sử dụng cột Xử lý (cột Z) để phân chia Đang xử lý, Chưa xử lý, và Không xử lý (WRITE OFF)
         trang_thai = data['Xử lý'].astype(str).str.strip().str.lower()
-        data['CXD_DangXuLy'] = np.where(trang_thai == 'hoàn thành', data['CXD'], 0)
-        data['CXD_ChuaXuLy'] = np.where(trang_thai != 'hoàn thành', data['CXD'], 0) # Có tổng mọi giá trị
         
+        # Đang xử lý = CHƯA XÁC ĐỊNH (cột Y) + Hoàn thành (cột Z)
+        data['CXD_DangXuLy'] = np.where(trang_thai == 'hoàn thành', data['CXD'], 0)
         data['GT_CXD_DangXuLy'] = np.where(trang_thai == 'hoàn thành', data['Tổng_CXD_num'], 0)
-        data['GT_CXD_ChuaXuLy'] = np.where(trang_thai != 'hoàn thành', data['Tổng_CXD_num'], 0)
+        
+        # WRITE OFF = CHƯA XÁC ĐỊNH (cột Y) + Đang xử lý (cột Z)
+        data['CXD_WriteOff'] = np.where(trang_thai == 'đang xử lý', data['CXD'], 0)
+        data['CXD_WriteOff_Val'] = np.where(trang_thai == 'đang xử lý', data['Tổng_CXD_num'], 0)
+        
+        # Chưa xử lý = CHƯA XÁC ĐỊNH (cột Y) + các trường hợp còn lại
+        data['CXD_ChuaXuLy'] = np.where((trang_thai != 'hoàn thành') & (trang_thai != 'đang xử lý'), data['CXD'], 0)
+        data['GT_CXD_ChuaXuLy'] = np.where((trang_thai != 'hoàn thành') & (trang_thai != 'đang xử lý'), data['Tổng_CXD_num'], 0)
+        
         data['GT_ST_NhapThieu'] = np.where(data['LyDo_X'].str.contains('siêu thị') & data['LyDo_Loi'].str.contains('thiếu'), data['Tổng_ST_num'], 0)
         data['GT_ST_SaiQT'] = np.where(data['LyDo_X'].str.contains('siêu thị') & ~data['LyDo_Loi'].str.contains('thiếu'), data['Tổng_ST_num'], 0)
-        
-        # Tính tổng Giá trị Chưa xử lý theo từng Ngành hàng - ST để đồng bộ logic WRITE OFF với Bảng 1.2
-        df_unprocessed = data[(trang_thai != 'hoàn thành') & (data['CXD'] > 0)].copy()
-        if not df_unprocessed.empty:
-            st_val = df_unprocessed.groupby(['CLV2', 'ID ST'])['Tổng_GT_num'].sum().reset_index()
-            st_val.rename(columns={'Tổng_GT_num': 'ST_Total_CXD_Val'}, inplace=True)
-            data = pd.merge(data, st_val, on=['CLV2', 'ID ST'], how='left')
-        else:
-            data['ST_Total_CXD_Val'] = 0
-            
-        data['ST_Total_CXD_Val'] = data['ST_Total_CXD_Val'].fillna(0)
-        
-        # Cập nhật lại trang_thai vì pd.merge tạo ra data mới và index bị thay đổi
-        trang_thai = data['Xử lý'].astype(str).str.strip().str.lower()
-        
-        # Tính riêng cho Không xử lý (WRITE OFF) = case Chưa xử lý có Tổng GT theo ST < 100k
-        data['CXD_WriteOff'] = np.where((trang_thai != 'hoàn thành') & (data['ST_Total_CXD_Val'] < 100000), data['CXD'], 0)
-        # Chỉ cộng giá trị của những item thực sự là CXD vào cột giá trị WRITE OFF
-        data['CXD_WriteOff_Val'] = np.where((trang_thai != 'hoàn thành') & (data['ST_Total_CXD_Val'] < 100000) & (data['CXD'] > 0), data['Tổng_GT_num'], 0)
         
         data['Is_Da_Xu_Ly'] = (data['Xử lý'].astype(str).str.strip().str.lower() == 'hoàn thành') & (data['Hao hụt'].fillna(0) <= 0)
         data['ST_Chenh_Lech'] = np.where(data['Chênh lệch_clean'].abs() > 0, data['ID ST'], np.nan)
