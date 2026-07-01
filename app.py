@@ -1116,6 +1116,7 @@ with tab_main:
         "Tất cả các tuần",
         "Nguyên Tháng 4",
         "Nguyên Tháng 5",
+        "Nguyên Tháng 6",
         "Tuần 14 (30.03 - 05.04)",
         "Tuần 15 (06.04 - 12.04)",
         "Tuần 16 (13.04 - 19.04)",
@@ -1124,13 +1125,18 @@ with tab_main:
         "Tuần 19 (04.05 - 10.05)",
         "Tuần 20 (11.05 - 17.05)",
         "Tuần 21 (18.05 - 24.05)",
-        "Tuần 22 (25.05 - 31.05)"
+        "Tuần 22 (25.05 - 31.05)",
+        "Tuần 23 (01.06 - 07.06)",
+        "Tuần 24 (08.06 - 14.06)",
+        "Tuần 25 (15.06 - 21.06)",
+        "Tuần 26 (22.06 - 28.06)",
+        "Tuần 27 (29.06 - 05.07)"
     ]
 
     week_filter = st.selectbox("📅 Chọn Tuần:", week_options)
 
     start_date = pd.to_datetime('2026-03-30')
-    end_date = pd.to_datetime('2026-05-31')
+    end_date = pd.to_datetime('2026-07-05')
 
     if week_filter == "Nguyên Tháng 4":
         start_date = pd.to_datetime('2026-04-01')
@@ -1138,6 +1144,9 @@ with tab_main:
     elif week_filter == "Nguyên Tháng 5":
         start_date = pd.to_datetime('2026-05-01')
         end_date = pd.to_datetime('2026-05-31')
+    elif week_filter == "Nguyên Tháng 6":
+        start_date = pd.to_datetime('2026-06-01')
+        end_date = pd.to_datetime('2026-06-30')
     elif week_filter != "Tất cả các tuần":
         date_str = week_filter.split('(')[1].split(')')[0]
         start_str, end_str = date_str.split(' - ')
@@ -1231,7 +1240,9 @@ with tab_main:
         # Bảng so sánh từng tuần
         def assign_week(date):
             if pd.isna(date): return None
-            for opt in week_options[3:]: # Start from Tuần 14
+            for opt in week_options:
+                if not opt.startswith("Tuần"):
+                    continue
                 date_str = opt.split('(')[1].split(')')[0]
                 start_str, end_str = date_str.split(' - ')
                 s_date = pd.to_datetime(start_str + '.2026', format='%d.%m.%Y')
@@ -1912,6 +1923,5 @@ with tab_dc:
         
     nx_b_dc = generate_insights(df_b_dc_base, "Bảng 6", df_b_dc)
     st.text_area("Nhận xét Đánh giá Lỗi:", value=nx_b_dc, key="nx_b_dc", height=100)
-
 
 
