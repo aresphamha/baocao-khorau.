@@ -143,7 +143,9 @@ def load_data():
     # W tương ứng N, X tương ứng O, Y tương ứng P
     df['LyDo_W'] = df['Hao hụt'].astype(str).str.strip().str.lower()
     df['LyDo_X'] = df['Siêu thị'].astype(str).str.strip().str.lower()
-    df['LyDo_Y'] = df['Kho rau\nChưa xác định'].astype(str).str.strip().str.lower()
+    # Kết hợp cột Y giữa các tháng cũ (Kho rau\nChưa xác định) và tháng mới (Kho rau)
+    col_y = df.get('Kho rau\nChưa xác định', pd.Series(np.nan, index=df.index)).fillna(df.get('Kho rau', np.nan))
+    df['LyDo_Y'] = col_y.astype(str).str.strip().str.lower()
     df['LyDo_Loi'] = df['Lỗi'].astype(str).str.strip().str.lower() if 'Lỗi' in df.columns else ''
     
     df['Qty_N'] = df['Hạo hụt tự nhiên'].apply(clean_number)
