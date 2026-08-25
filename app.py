@@ -1789,8 +1789,7 @@ with tab_daily:
                         st.dataframe(df_only_du, use_container_width=True)
 
             except Exception as e:
-                st.error(f"Đã xảy ra lỗi khi chạy đối soát: {e}")
-                st.exception(e)
+                st.warning("⚠️ Không thể kết nối cơ sở dữ liệu StarRocks (Yêu cầu kết nối VPN). Tính năng đối soát chéo trực tiếp từ database tạm thời không khả dụng.")
     
     st.write("---")
     
