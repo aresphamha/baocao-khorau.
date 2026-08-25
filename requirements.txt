@@ -1,5 +1,7 @@
-pandas
 streamlit
+pandas
+numpy
+pymysql
 openpyxl
-
-xlsxwriter
+requests
+jinja2

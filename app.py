@@ -2,10 +2,16 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
-import pymysql
+try:
+    import pymysql
+    pymysql_available = True
+except ImportError:
+    pymysql_available = False
 
 # DB connection helper for StarRocks database
 def get_connection():
+    if not pymysql_available:
+        raise ImportError("Thư viện 'pymysql' chưa được cài đặt trên máy chủ Streamlit Cloud. Vui lòng thêm 'pymysql' vào file 'requirements.txt' của dự án.")
     return pymysql.connect(
         host='103.147.122.103',
         port=9030,
